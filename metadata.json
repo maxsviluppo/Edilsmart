@@ -1,0 +1,8 @@
+{
+  "name": "EdilSmart - Gestione Cantieri & Computo",
+  "description": "Una web app professionale per il computo metrico, la contabilità di cantiere e la gestione amministrativa, ispirata a PriMus. Include integrazione AI per la ricerca nei prezziari regionali e dashboard statistiche.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
