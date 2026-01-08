@@ -306,8 +306,22 @@ const ComputoMetrico: React.FC<ComputoMetricoProps> = ({ project }) => {
                     />
                     <div className="hidden print:block p-2 text-justify whitespace-pre-wrap">{row.description}</div>
 
-                    <div className="text-right font-bold text-[10px] px-2 pb-1 text-emerald-800 italic">
-                      {row.unit ? `(${row.unit})` : ''}
+                    <div className="flex justify-end items-center gap-2 px-2 pb-1">
+                      <select
+                        className="text-[10px] px-2 py-1 border border-slate-300 rounded bg-white focus:ring-2 focus:ring-emerald-500 outline-none print:hidden"
+                        value={row.unit}
+                        onChange={(e) => updateRow(row.id, 'unit', e.target.value)}
+                      >
+                        <option value="">-- U.M. --</option>
+                        {(() => {
+                          const saved = localStorage.getItem('unit_measurements');
+                          const units = saved ? JSON.parse(saved) : ['M', 'M2', 'M3', 'ML', 'A CORPO', 'Cad.UNO'];
+                          return units.map((u: string) => <option key={u} value={u}>{u}</option>);
+                        })()}
+                      </select>
+                      <div className="font-bold text-[10px] text-emerald-800 italic">
+                        {row.unit ? `(${row.unit})` : ''}
+                      </div>
                     </div>
 
                     {/* Actions */}

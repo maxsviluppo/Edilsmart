@@ -2,24 +2,30 @@ import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import ComputoMetrico from './components/ComputoMetrico';
+import Cronoprogramma from './components/Cronoprogramma';
 import Accounting from './components/Accounting';
 import PriceListManager from './components/PriceListManager';
 import NewProjectModal from './components/NewProjectModal';
+import ProjectDetails from './components/ProjectDetails';
+import ProjectSettings from './components/ProjectSettings';
 import Settings from './components/Settings'; // New Import
+import Statistics from './components/Statistics';
 import { HardHat, Clock, Calendar, DollarSign, User } from 'lucide-react';
 import { Project } from './types';
+
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [projects, setProjects] = useState<Project[]>([
-    { id: '1', name: 'Ristrutturazione Villa Rossi', client: 'Giuseppe Rossi', status: 'In Corso', budget: 150000, startDate: '2024-01-15', progress: 45, location: 'Via Roma 10' },
-    { id: '2', name: 'Rifacimento Facciata Condominio', client: 'Amm. Bianchi', status: 'In attesa', budget: 85000, startDate: '2024-03-01', progress: 0, location: 'Piazza Garibaldi 2' },
-    { id: '3', name: 'Nuova Costruzione Box Auto', client: 'Luigi Verdi', status: 'Pianificato', budget: 35000, startDate: '2024-04-10', progress: 0 },
-    { id: '4', name: 'Manutenzione Straordinaria Tetto', client: 'Condominio Parco', status: 'Completato', budget: 28000, startDate: '2023-11-05', progress: 100 },
+    { id: '1', name: 'Ristrutturazione Villa Rossi', client: 'Giuseppe Rossi', status: 'In Corso', budget: 150000, startDate: '2024-01-15', endDate: '2024-12-31', iva: 10, progress: 45, location: 'Via Roma 10', totalExpenses: 65000, revenue: 150000 },
+    { id: '2', name: 'Rifacimento Facciata Condominio', client: 'Amm. Bianchi', status: 'In attesa', budget: 85000, startDate: '2024-03-01', endDate: '2024-09-30', iva: 20, progress: 0, location: 'Piazza Garibaldi 2', totalExpenses: 5000, revenue: 85000 },
+    { id: '3', name: 'Nuova Costruzione Box Auto', client: 'Luigi Verdi', status: 'Pianificato', budget: 35000, startDate: '2024-04-10', endDate: '2024-08-15', iva: 10, progress: 0, totalExpenses: 0, revenue: 35000 },
+    { id: '4', name: 'Manutenzione Straordinaria Tetto', client: 'Condominio Parco', status: 'Completato', budget: 28000, startDate: '2023-11-05', endDate: '2024-02-20', iva: 20, progress: 100, totalExpenses: 22000, revenue: 28000 },
   ]);
 
   const [selectedProjectId, setSelectedProjectId] = useState<string>(projects[0]?.id || '');
-  const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false); // Modal State
+  const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
+  const [showProjectSettings, setShowProjectSettings] = useState(false);
 
   // Ensure a project is selected if list is not empty
   useEffect(() => {
@@ -38,7 +44,16 @@ const App: React.FC = () => {
     setProjects([newProject, ...projects]);
     setSelectedProjectId(newProject.id);
     setActiveTab('projects');
-    // Helper toast? For now just UI update is enough
+  };
+
+  const handleUpdateProject = (updatedProject: Project) => {
+    setProjects(projects.map(p => p.id === updatedProject.id ? updatedProject : p));
+  };
+
+  const handleDeleteProject = (projectId: string) => {
+    setProjects(projects.filter(p => p.id !== projectId));
+    setSelectedProjectId(projects.filter(p => p.id !== projectId)[0]?.id || '');
+    setActiveTab('projects');
   };
 
   const getStatusColor = (status: string) => {
@@ -53,96 +68,134 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard />;
+        return <Dashboard projects={projects} />;
       case 'computo':
         return <ComputoMetrico project={selectedProject} />;
+      case 'cronoprogramma':
+        return <Cronoprogramma project={selectedProject} />;
       case 'pricelists':
         return <PriceListManager />;
       case 'accounting':
         return <Accounting />;
+      case 'statistics':
+        return <Statistics projects={projects} />;
       case 'projects':
         return (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-                <div>
-                  <p className="text-slate-500 text-sm font-medium uppercase">Cantieri Attivi</p>
-                  <p className="text-3xl font-bold text-slate-800 mt-1">{projects.filter(p => p.status === 'In Corso').length}</p>
-                </div>
-                <div className="bg-blue-50 p-3 rounded-lg text-blue-600">
-                  <HardHat size={24} />
-                </div>
-              </div>
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-                <div>
-                  <p className="text-slate-500 text-sm font-medium uppercase">Valore Totale</p>
-                  <p className="text-3xl font-bold text-slate-800 mt-1">€ {(projects.reduce((acc, p) => acc + p.budget, 0) / 1000).toFixed(1)}k</p>
-                </div>
-                <div className="bg-emerald-50 p-3 rounded-lg text-emerald-600">
-                  <DollarSign size={24} />
-                </div>
-              </div>
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-                <div>
-                  <p className="text-slate-500 text-sm font-medium uppercase">In Attesa</p>
-                  <p className="text-3xl font-bold text-slate-800 mt-1">{projects.filter(p => p.status === 'In attesa' || p.status === 'Pianificato').length}</p>
-                </div>
-                <div className="bg-amber-50 p-3 rounded-lg text-amber-600">
-                  <Clock size={24} />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4">
-              {projects.map(project => (
-                <div key={project.id}
-                  className={`bg-white rounded-xl border p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 cursor-pointer transition-all ${selectedProjectId === project.id ? 'border-emerald-500 ring-2 ring-emerald-100 shadow-md' : 'border-slate-200 hover:shadow-md'}`}
-                  onClick={() => setSelectedProjectId(project.id)}
+            {/* Show project settings if enabled */}
+            {showProjectSettings && selectedProject ? (
+              <ProjectSettings
+                project={selectedProject}
+                onUpdate={handleUpdateProject}
+                onDelete={handleDeleteProject}
+                onClose={() => setShowProjectSettings(false)}
+              />
+            ) : selectedProject ? (
+              <div>
+                <button
+                  onClick={() => setSelectedProjectId('')}
+                  className="mb-4 text-slate-600 hover:text-slate-800 flex items-center gap-2 font-medium"
                 >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      {selectedProjectId === project.id && <div className="w-2 h-2 rounded-full bg-emerald-500" title="Progetto Attivo"></div>}
-                      <h3 className="text-lg font-bold text-slate-800">{project.name}</h3>
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getStatusColor(project.status)}`}>
-                        {project.status}
-                      </span>
+                  ← Torna alla lista cantieri
+                </button>
+                <ProjectDetails
+                  project={selectedProject}
+                  onNavigate={setActiveTab}
+                  onOpenSettings={() => setShowProjectSettings(true)}
+                />
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                  <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                      <p className="text-slate-500 text-sm font-medium uppercase">Cantieri Attivi</p>
+                      <p className="text-3xl font-bold text-slate-800 mt-1">{projects.filter(p => p.status === 'In Corso').length}</p>
                     </div>
-                    <div className="flex items-center gap-6 text-sm text-slate-500">
-                      <div className="flex items-center gap-1">
-                        <User size={14} />
-                        {project.client}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Calendar size={14} />
-                        {new Date(project.startDate || '').toLocaleDateString()}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <DollarSign size={14} />
-                        € {project.budget.toLocaleString()}
-                      </div>
+                    <div className="bg-blue-50 p-3 rounded-lg text-blue-600">
+                      <HardHat size={24} />
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-6 w-full md:w-auto">
-                    <div className="flex-1 md:w-48">
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="text-slate-500 font-medium">Avanzamento</span>
-                        <span className="text-slate-700 font-bold">{project.progress || 0}%</span>
-                      </div>
-                      <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                        <div
-                          className="bg-emerald-600 h-full rounded-full transition-all duration-500"
-                          style={{ width: `${project.progress || 0}%` }}
-                        ></div>
-                      </div>
+                  <div
+                    onClick={() => setActiveTab('statistics')}
+                    className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between cursor-pointer hover:border-blue-300 hover:shadow-md transition-all group"
+                  >
+                    <div>
+                      <p className="text-slate-500 text-sm font-medium uppercase group-hover:text-blue-600 transition-colors">Valore Totale</p>
+                      <p className="text-3xl font-bold text-slate-800 mt-1">€ {(projects.reduce((acc, p) => acc + p.budget, 0) / 1000).toFixed(1)}k</p>
                     </div>
-                    <button className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg text-sm font-semibold transition-colors">
-                      {selectedProjectId === project.id ? 'Selezionato' : 'Seleziona'}
-                    </button>
+                    <div className="bg-emerald-50 p-3 rounded-lg text-emerald-600 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                      <DollarSign size={24} />
+                    </div>
+                  </div>
+                  <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                      <p className="text-slate-500 text-sm font-medium uppercase">In Attesa</p>
+                      <p className="text-3xl font-bold text-slate-800 mt-1">{projects.filter(p => p.status === 'In attesa' || p.status === 'Pianificato').length}</p>
+                    </div>
+                    <div className="bg-amber-50 p-3 rounded-lg text-amber-600">
+                      <Clock size={24} />
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
+
+                <div className="grid grid-cols-1 gap-4">
+                  {projects.map(project => (
+                    <div key={project.id}
+                      className={`bg-white rounded-xl border p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 cursor-pointer transition-all hover:shadow-md ${selectedProjectId === project.id ? 'border-emerald-500 ring-2 ring-emerald-100 shadow-md' : 'border-slate-200'}`}
+                      onClick={() => setSelectedProjectId(project.id)}
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="text-lg font-bold text-slate-800">{project.name}</h3>
+                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getStatusColor(project.status)}`}>
+                            {project.status}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-6 text-sm text-slate-500 flex-wrap">
+                          <div className="flex items-center gap-1">
+                            <User size={14} />
+                            {project.client}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Calendar size={14} />
+                            Inizio: {new Date(project.startDate || '').toLocaleDateString('it-IT')}
+                          </div>
+                          {project.endDate && (
+                            <div className="flex items-center gap-1">
+                              <Clock size={14} />
+                              Fine: {new Date(project.endDate).toLocaleDateString('it-IT')}
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1">
+                            <DollarSign size={14} />
+                            € {project.budget.toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-6 w-full md:w-auto">
+                        <div className="flex-1 md:w-48">
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-slate-500 font-medium">Avanzamento</span>
+                            <span className="text-slate-700 font-bold">{project.progress || 0}%</span>
+                          </div>
+                          <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                            <div
+                              className="bg-emerald-600 h-full rounded-full transition-all duration-500"
+                              style={{ width: `${project.progress || 0}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                        <button className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg text-sm font-semibold transition-colors">
+                          Visualizza
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         );
       case 'reports':

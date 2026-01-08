@@ -34,9 +34,13 @@ export interface Project {
   budget: number;
   status: 'In Corso' | 'Completato' | 'Preventivo' | 'In attesa' | 'Pianificato';
   startDate?: string;
+  endDate?: string;
+  iva?: number;
   progress?: number;
   computo?: ComputoRow[];
   expenses?: Expense[];
+  totalExpenses?: number;
+  revenue?: number;
 }
 
 export interface Invoice {
@@ -47,6 +51,28 @@ export interface Invoice {
   items: { description: string; amount: number }[];
   totalAmount: number;
   tax: number;
+}
+
+export interface Supplier {
+  id: string;
+  name: string;
+  vatNumber?: string;
+  email?: string;
+  phone?: string;
+  category?: string;
+}
+
+export interface SupplierInvoice {
+  id: string;
+  number: string;
+  date: string;
+  dueDate?: string;
+  supplierId: string;
+  supplierName: string;
+  amount: number;
+  description: string;
+  status: 'Pagata' | 'In Scadenza' | 'Scaduta' | 'Bozza';
+  attachment?: string;
 }
 
 export interface PriceListItem {
