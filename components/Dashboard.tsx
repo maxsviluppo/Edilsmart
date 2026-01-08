@@ -1,5 +1,4 @@
 
-
 import React, { useMemo } from 'react';
 import {
   BarChart,
@@ -126,14 +125,14 @@ const Dashboard: React.FC<DashboardProps> = ({ projects }) => {
         {/* Cost Breakdown */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
           <h3 className="text-lg font-bold text-slate-800 mb-6">Ripartizione Costi Media</h3>
-          <div className="flex items-center">
-            <div className="h-80 flex-1">
+          <div className="flex flex-col sm:flex-row items-center">
+            <div className="h-64 sm:h-80 w-full sm:flex-1">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={pieData}
                     innerRadius={60}
-                    outerRadius={100}
+                    outerRadius={80}
                     paddingAngle={5}
                     dataKey="value"
                   >
@@ -145,7 +144,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects }) => {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="space-y-4 pr-8">
+            <div className="flex flex-row sm:flex-col flex-wrap justify-center sm:justify-start gap-4 sm:space-y-4 sm:pr-8 w-full sm:w-auto mt-4 sm:mt-0">
               {pieData.map((item) => (
                 <div key={item.name} className="flex items-center space-x-3">
                   <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }}></div>

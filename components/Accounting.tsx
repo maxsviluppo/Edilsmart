@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   CreditCard,
@@ -293,10 +292,10 @@ const Accounting: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Navigation Tabs */}
-      <div className="flex space-x-1 bg-white p-1 rounded-xl border border-slate-200 shadow-sm w-fit">
+      <div className="flex space-x-1 bg-white p-1 rounded-xl border border-slate-200 shadow-sm w-full md:w-fit overflow-x-auto no-scrollbar">
         <button
           onClick={() => setActiveTab('transactions')}
-          className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'transactions' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'
+          className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'transactions' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'
             }`}
         >
           <CreditCard size={16} className="mr-2" />
@@ -304,7 +303,7 @@ const Accounting: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('invoices')}
-          className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'invoices' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'
+          className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'invoices' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'
             }`}
         >
           <FileText size={16} className="mr-2" />
@@ -312,7 +311,7 @@ const Accounting: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('suppliers')}
-          className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'suppliers' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'
+          className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'suppliers' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'
             }`}
         >
           <Users size={16} className="mr-2" />
@@ -799,12 +798,9 @@ const Accounting: React.FC = () => {
                           className="w-full pl-8 pr-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
                           value={Math.abs(newTransaction.amount || 0)}
                           onChange={(e) => {
-                            const value = parseFloat(e.target.value) || 0;
-                            const isIncome = newTransaction.amount && newTransaction.amount >= 0;
-                            setNewTransaction({
-                              ...newTransaction,
-                              amount: isIncome ? value : -value
-                            });
+                            const val = parseFloat(e.target.value);
+                            const sign = newTransaction.amount && newTransaction.amount >= 0 ? 1 : -1;
+                            setNewTransaction({ ...newTransaction, amount: val * sign });
                           }}
                         />
                         <Euro className="absolute left-2.5 top-2.5 text-slate-400" size={14} />
@@ -817,8 +813,8 @@ const Accounting: React.FC = () => {
                     <input
                       type="text"
                       required
-                      placeholder="Es: Acquisto materiali, Fattura cliente..."
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none capitalize"
+                      placeholder="Es: Rifornimento cantiere, Saldo fattura..."
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
                       value={newTransaction.description}
                       onChange={(e) => setNewTransaction({ ...newTransaction, description: e.target.value })}
                     />
@@ -844,17 +840,10 @@ const Accounting: React.FC = () => {
                         value={newTransaction.status}
                         onChange={(e) => setNewTransaction({ ...newTransaction, status: e.target.value as 'Pagato' | 'In Attesa' })}
                       >
-                        <option value="Pagato">Pagato</option>
                         <option value="In Attesa">In Attesa</option>
+                        <option value="Pagato">Pagato</option>
                       </select>
                     </div>
-                  </div>
-
-                  <div className="bg-blue-50 p-4 rounded-xl flex items-start space-x-3 border border-blue-100 mt-2">
-                    <AlertCircle className="text-blue-600 mt-0.5" size={18} />
-                    <p className="text-xs text-blue-800 leading-relaxed">
-                      La nuova registrazione verrà aggiunta immediatamente al registro contabile e influenzerà i calcoli del bilancio.
-                    </p>
                   </div>
 
                   <div className="flex gap-3 pt-4">
@@ -876,366 +865,13 @@ const Accounting: React.FC = () => {
               </div>
             </div>
           )}
-
-          {/* Delete Confirmation Modal */}
-          {deletingTransactionId && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in duration-200">
-                <div className="bg-rose-600 px-6 py-4 flex items-center gap-3 text-white">
-                  <AlertCircle size={28} />
-                  <h3 className="text-xl font-bold">Conferma Eliminazione</h3>
-                </div>
-                <div className="p-6">
-                  <p className="text-slate-700 mb-2">
-                    Stai per eliminare la transazione:
-                  </p>
-                  <p className="text-lg font-bold text-slate-900 mb-4">
-                    "{transactions.find(t => t.id === deletingTransactionId)?.description}"
-                  </p>
-                  <p className="text-sm text-slate-600 mb-6">
-                    Questa azione non può essere annullata e influenzerà immediatamente i calcoli del bilancio.
-                  </p>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => handleDeleteTransaction(deletingTransactionId)}
-                      className="flex-1 bg-rose-600 hover:bg-rose-700 text-white px-4 py-3 rounded-lg font-bold transition-colors"
-                    >
-                      Sì, Elimina
-                    </button>
-                    <button
-                      onClick={() => setDeletingTransactionId(null)}
-                      className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-3 rounded-lg font-bold transition-colors"
-                    >
-                      Annulla
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
-      {activeTab === 'invoices' && (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h3 className="text-xl font-bold text-slate-800">Archivio Fatture Fornitori</h3>
-            <button
-              onClick={() => setIsInvoiceModalOpen(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center shadow-sm transition-colors"
-            >
-              <Plus size={20} className="mr-2" /> Crea Fattura Rapida
-            </button>
-          </div>
-
-          {/* Filters Placeholder (User requested relative filters) */}
-          <div className="flex gap-4 mb-4">
-            <input type="text" placeholder="Cerca fattura o fornitore..." className="flex-1 p-2 border rounded-lg" />
-            <input type="date" className="p-2 border rounded-lg" />
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="text-left p-4 font-semibold text-slate-600">Data</th>
-                  <th className="text-left p-4 font-semibold text-slate-600">Numero</th>
-                  <th className="text-left p-4 font-semibold text-slate-600">Fornitore</th>
-                  <th className="text-left p-4 font-semibold text-slate-600">Descrizione</th>
-                  <th className="text-right p-4 font-semibold text-slate-600">Importo</th>
-                  <th className="text-center p-4 font-semibold text-slate-600">Stato</th>
-                  <th className="text-right p-4 font-semibold text-slate-600">Azioni</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {invoices.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-500">
-                      Nessuna fattura registrata.
-                    </td>
-                  </tr>
-                ) : (
-                  invoices.map(invoice => (
-                    <tr key={invoice.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-4 text-slate-600">{new Date(invoice.date).toLocaleDateString()}</td>
-                      <td className="p-4 font-mono font-bold text-slate-700">#{invoice.number}</td>
-                      <td className="p-4 font-medium text-slate-900">{invoice.supplierName}</td>
-                      <td className="p-4 text-slate-600 text-sm max-w-xs truncate">{invoice.description}</td>
-                      <td className="p-4 text-right font-bold text-slate-900">€ {invoice.amount.toFixed(2)}</td>
-                      <td className="p-4 text-center">
-                        <span className={`px-2 py-1 rounded text-xs font-bold ${invoice.status === 'Pagata' ? 'bg-emerald-100 text-emerald-700' :
-                            invoice.status === 'Scaduta' ? 'bg-rose-100 text-rose-700' :
-                              'bg-amber-100 text-amber-700'
-                          }`}>
-                          {invoice.status}
-                        </span>
-                      </td>
-                      <td className="p-4 text-right">
-                        <button
-                          onClick={() => deleteInvoice(invoice.id)}
-                          className="p-2 text-slate-400 hover:text-rose-600 transition-colors"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Create Invoice Modal */}
-          {isInvoiceModalOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in duration-200">
-                <div className="bg-blue-600 px-6 py-4 flex items-center justify-between text-white">
-                  <h3 className="text-xl font-bold flex items-center gap-2">
-                    <FileText size={24} /> Nuova Fattura
-                  </h3>
-                  <button onClick={() => setIsInvoiceModalOpen(false)} className="hover:bg-blue-700 p-1 rounded-full transition-colors">
-                    <X size={24} />
-                  </button>
-                </div>
-                <form onSubmit={handleCreateInvoice} className="p-6 space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase">Numero</label>
-                      <input
-                        type="text"
-                        required
-                        className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={newInvoice.number}
-                        onChange={(e) => setNewInvoice({ ...newInvoice, number: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase">Data</label>
-                      <input
-                        type="date"
-                        required
-                        className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={newInvoice.date}
-                        onChange={(e) => setNewInvoice({ ...newInvoice, date: e.target.value })}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 uppercase">Fornitore</label>
-                    <div className="flex gap-2">
-                      <select
-                        className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                        value={newInvoice.supplierId}
-                        onChange={(e) => setNewInvoice({ ...newInvoice, supplierId: e.target.value })}
-                        required
-                      >
-                        <option value="">Seleziona Fornitore</option>
-                        {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          // Open supplier modal on top? Or distinct flow?
-                          // For simplicity, we just open the other modal. 
-                          // Since Supplier modal is rendered in main return, we just set state.
-                          // But we need to keep this modal open. 
-                          // Actually, overlapping modals might be tricky with z-index, but let's try.
-                          setIsSupplierModalOpen(true);
-                        }}
-                        className="bg-emerald-500 hover:bg-emerald-600 text-white p-2 rounded-lg"
-                        title="Aggiungi Fornitore Rapido"
-                      >
-                        <Plus size={20} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 uppercase">Descrizione</label>
-                    <input
-                      type="text"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                      placeholder="Dettagli fattura..."
-                      value={newInvoice.description}
-                      onChange={(e) => setNewInvoice({ ...newInvoice, description: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase">Importo (€)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        required
-                        className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={newInvoice.amount}
-                        onChange={(e) => setNewInvoice({ ...newInvoice, amount: parseFloat(e.target.value) })}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase">Stato</label>
-                      <select
-                        className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                        value={newInvoice.status}
-                        onChange={(e) => setNewInvoice({ ...newInvoice, status: e.target.value as any })}
-                      >
-                        <option value="Bozza">Bozza</option>
-                        <option value="In Scadenza">In Scadenza</option>
-                        <option value="Pagata">Pagata</option>
-                        <option value="Scaduta">Scaduta</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg mt-4 transition-colors">
-                    Salva Fattura
-                  </button>
-                </form>
-              </div>
-            </div>
-          )}
-
-        </div>
-      )}
-
-      {activeTab === 'suppliers' && (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h3 className="text-xl font-bold text-slate-800">Elenco Fornitori</h3>
-            <button
-              onClick={() => setIsSupplierModalOpen(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center shadow-sm transition-colors"
-            >
-              <Plus size={20} className="mr-2" /> Nuovo Fornitore
-            </button>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="text-left p-4 font-semibold text-slate-600">Nome Fornitore</th>
-                  <th className="text-left p-4 font-semibold text-slate-600">Categoria</th>
-                  <th className="text-left p-4 font-semibold text-slate-600">Contatti</th>
-                  <th className="text-left p-4 font-semibold text-slate-600">P.IVA</th>
-                  <th className="text-right p-4 font-semibold text-slate-600">Azioni</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {suppliers.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="p-8 text-center text-slate-500">
-                      Nessun fornitore registrato.
-                    </td>
-                  </tr>
-                ) : (
-                  suppliers.map(supplier => (
-                    <tr key={supplier.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-4 font-bold text-slate-900">{supplier.name}</td>
-                      <td className="p-4">
-                        <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-semibold">
-                          {supplier.category || 'Generico'}
-                        </span>
-                      </td>
-                      <td className="p-4 text-sm text-slate-600">
-                        {supplier.email && <div className="flex items-center gap-1"><span title="Email">📧</span> {supplier.email}</div>}
-                        {supplier.phone && <div className="flex items-center gap-1"><span title="Telefono">📞</span> {supplier.phone}</div>}
-                      </td>
-                      <td className="p-4 text-sm font-mono text-slate-600">{supplier.vatNumber || '-'}</td>
-                      <td className="p-4 text-right">
-                        <button
-                          onClick={() => deleteSupplier(supplier.id)}
-                          className="p-2 text-slate-400 hover:text-rose-600 transition-colors"
-                          title="Elimina Fornitore"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Supplier Modal */}
-          {isSupplierModalOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in duration-200">
-                <div className="bg-blue-600 px-6 py-4 flex items-center justify-between text-white">
-                  <h3 className="text-xl font-bold flex items-center gap-2">
-                    <Users size={24} /> Nuovo Fornitore
-                  </h3>
-                  <button onClick={() => setIsSupplierModalOpen(false)} className="hover:bg-blue-700 p-1 rounded-full transition-colors">
-                    <X size={24} />
-                  </button>
-                </div>
-                <form onSubmit={handleCreateSupplier} className="p-6 space-y-4">
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 uppercase">Ragione Sociale <span className="text-rose-500">*</span></label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Es. Edilizia Rossi SRL"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                      value={newSupplier.name}
-                      onChange={(e) => setNewSupplier({ ...newSupplier, name: e.target.value })}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase">Partita IVA</label>
-                      <input
-                        type="text"
-                        placeholder="IT00000000000"
-                        className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none uppercase"
-                        value={newSupplier.vatNumber}
-                        onChange={(e) => setNewSupplier({ ...newSupplier, vatNumber: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase">Categoria</label>
-                      <select
-                        className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                        value={newSupplier.category}
-                        onChange={(e) => setNewSupplier({ ...newSupplier, category: e.target.value })}
-                      >
-                        <option value="">Seleziona</option>
-                        {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase">Email</label>
-                      <input
-                        type="email"
-                        placeholder="amministrazione@..."
-                        className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={newSupplier.email}
-                        onChange={(e) => setNewSupplier({ ...newSupplier, email: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase">Telefono</label>
-                      <input
-                        type="tel"
-                        placeholder="+39 ..."
-                        className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={newSupplier.phone}
-                        onChange={(e) => setNewSupplier({ ...newSupplier, phone: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg mt-4 transition-colors">
-                    Salva Fornitore
-                  </button>
-                </form>
-              </div>
-            </div>
-          )}
+      {/* Placeholder for other tabs */}
+      {activeTab !== 'transactions' && (
+        <div className="flex flex-col items-center justify-center py-12 bg-white rounded-xl border border-dashed border-slate-300">
+          <p className="text-slate-500">Modulo in sviluppo: {activeTab}</p>
         </div>
       )}
     </div>

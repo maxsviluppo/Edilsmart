@@ -37,6 +37,12 @@ const Layout: React.FC<LayoutProps> = ({
   onProjectSelect
 }) => {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = React.useState(false);
+
+  // Close mobile sidebar when active tab changes
+  React.useEffect(() => {
+    setIsMobileSidebarOpen(false);
+  }, [activeTab, selectedProjectId]);
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -49,24 +55,61 @@ const Layout: React.FC<LayoutProps> = ({
   ];
 
   return (
-    <div className="flex h-screen bg-slate-50">
+    <div className="flex h-screen bg-slate-50 overflow-hidden">
+      {/* Mobile Header */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-slate-900 z-20 flex items-center justify-between px-4 text-white">
+        <button onClick={() => setIsMobileSidebarOpen(true)} className="p-2 -ml-2 hover:bg-slate-800 rounded-lg">
+          <Menu size={24} />
+        </button>
+        <span className="font-bold text-lg">EdilSmart</span>
+        <div className="w-8"></div> {/* Spacer for centering */}
+      </div>
+
+      {/* Mobile Sidebar Backdrop */}
+      {isMobileSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-30 md:hidden backdrop-blur-sm"
+          onClick={() => setIsMobileSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-slate-900 transition-all duration-300 flex flex-col print:hidden`}>
+      <aside className={`
+        fixed md:relative z-40 h-full bg-slate-900 transition-all duration-300 ease-in-out flex flex-col print:hidden
+        ${isMobileSidebarOpen ? 'translate-x-0 w-64 shadow-2xl' : '-translate-x-full md:translate-x-0'}
+        ${isSidebarOpen ? 'md:w-64' : 'md:w-20'}
+      `}>
         <div className="p-6 flex items-center justify-between text-white border-b border-slate-800">
-          {isSidebarOpen && <span className="font-bold text-xl tracking-tight">EdilSmart</span>}
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-1 hover:bg-slate-800 rounded">
-            {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
+          {(isSidebarOpen || isMobileSidebarOpen) && <span className="font-bold text-xl tracking-tight">EdilSmart</span>}
+          <button
+            onClick={() => {
+              if (window.innerWidth >= 768) {
+                setIsSidebarOpen(!isSidebarOpen);
+              } else {
+                setIsMobileSidebarOpen(false);
+              }
+            }}
+            className="p-1 hover:bg-slate-800 rounded"
+          >
+            {/* Show X on mobile or when open on desktop */}
+            {(isMobileSidebarOpen || (isSidebarOpen && window.innerWidth >= 768)) ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
 
-        {/* Project Selector */}
-        {isSidebarOpen && (
+        {/* Project Selector - Visible if sidebar is wide (on mobile it's always wide if open) */}
+        {(isSidebarOpen || isMobileSidebarOpen) && (
           <div className="px-4 pt-4 pb-0">
             <div className="relative group">
               <select
                 value={selectedProjectId}
                 onChange={(e) => onProjectSelect(e.target.value)}
                 className="w-full bg-slate-800 text-white p-3 pl-10 pr-8 rounded-lg appearance-none border border-slate-700 hover:border-slate-600 focus:outline-none focus:border-blue-500 cursor-pointer text-sm font-medium transition-colors"
+                style={{
+                  // Prevent truncation on mobile
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden'
+                }}
               >
                 <option value="" disabled>Seleziona Cantiere</option>
                 {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -81,15 +124,16 @@ const Layout: React.FC<LayoutProps> = ({
         <div className="p-4 pb-2">
           <button
             onClick={onNewProject}
-            className={`w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center justify-center transition-all shadow-lg shadow-emerald-900/20 group ${isSidebarOpen ? 'px-4 py-3' : 'p-3 aspect-square'}`}
+            className={`w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center justify-center transition-all shadow-lg shadow-emerald-900/20 group 
+              ${(isSidebarOpen || isMobileSidebarOpen) ? 'px-4 py-3' : 'p-3 aspect-square'}`}
             title="Crea Nuovo Progetto"
           >
-            <Plus size={24} className={`${isSidebarOpen ? 'mr-2' : ''} transition-transform group-hover:rotate-90`} />
-            {isSidebarOpen && <span className="font-bold whitespace-nowrap">Nuovo Progetto</span>}
+            <Plus size={24} className={`${(isSidebarOpen || isMobileSidebarOpen) ? 'mr-2' : ''} transition-transform group-hover:rotate-90`} />
+            {(isSidebarOpen || isMobileSidebarOpen) && <span className="font-bold whitespace-nowrap">Nuovo Progetto</span>}
           </button>
         </div>
 
-        <nav className="flex-1 mt-2 px-4 space-y-2">
+        <nav className="flex-1 mt-2 px-4 space-y-2 overflow-y-auto no-scrollbar">
           {menuItems.map((item) => (
             <button
               key={item.id}
@@ -99,8 +143,8 @@ const Layout: React.FC<LayoutProps> = ({
                 : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                 }`}
             >
-              <item.icon size={22} className={isSidebarOpen ? 'mr-3' : 'mx-auto'} />
-              {isSidebarOpen && <span className="font-medium">{item.label}</span>}
+              <item.icon size={22} className={(isSidebarOpen || isMobileSidebarOpen) ? 'mr-3' : 'mx-auto'} />
+              {(isSidebarOpen || isMobileSidebarOpen) && <span className="font-medium text-left">{item.label}</span>}
             </button>
           ))}
         </nav>
@@ -110,15 +154,15 @@ const Layout: React.FC<LayoutProps> = ({
             onClick={() => setActiveTab('settings')}
             className={`flex items-center w-full p-2 transition-colors rounded-lg ${activeTab === 'settings' ? 'text-emerald-400 bg-slate-800' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
           >
-            <Settings size={22} className={isSidebarOpen ? 'mr-3' : 'mx-auto'} />
-            {isSidebarOpen && <span>Impostazioni</span>}
+            <Settings size={22} className={(isSidebarOpen || isMobileSidebarOpen) ? 'mr-3' : 'mx-auto'} />
+            {(isSidebarOpen || isMobileSidebarOpen) && <span>Impostazioni</span>}
           </button>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto flex flex-col print:overflow-visible">
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-10 print:hidden">
+      <main className="flex-1 overflow-auto flex flex-col print:overflow-visible pt-16 md:pt-0">
+        <header className="hidden md:flex h-16 bg-white border-b border-slate-200 items-center justify-between px-8 sticky top-0 z-10 print:hidden">
           <h1 className="text-xl font-semibold text-slate-800">
             {menuItems.find(m => m.id === activeTab)?.label}
           </h1>
@@ -136,7 +180,7 @@ const Layout: React.FC<LayoutProps> = ({
           </div>
         </header>
 
-        <div className="p-8">
+        <div className="p-4 md:p-8">
           {children}
         </div>
       </main>
