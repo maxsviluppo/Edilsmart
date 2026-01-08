@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CILA - Comunicazione Inizio Lavori Asseverata</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 11pt;
+            line-height: 1.3;
+            color: #000;
+            background: white;
+        }
+
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            background: white;
+            padding: 20mm;
+            position: relative;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 3px double #000;
+        }
+
+        .header h1 {
+            font-size: 16pt;
+            font-weight: bold;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .header .subtitle {
+            font-size: 12pt;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .header .doc-number {
+            font-size: 10pt;
+            margin-top: 10px;
+            font-style: italic;
+        }
+
+        .normative-box {
+            background: #f5f5f5;
+            border: 1px solid #000;
+            padding: 10px;
+            margin: 15px 0;
+            font-size: 9pt;
+            text-align: center;
+        }
+
+        .section {
+            margin-bottom: 18px;
+            page-break-inside: avoid;
+        }
+
+        .section-title {
+            font-size: 11pt;
+            font-weight: bold;
+            background: #e0e0e0;
+            padding: 6px 10px;
+            margin-bottom: 10px;
+            border: 1px solid #000;
+            text-transform: uppercase;
+        }
+
+        .field-row {
+            display: flex;
+            margin-bottom: 8px;
+            align-items: baseline;
+            min-height: 22px;
+        }
+
+        .field-label {
+            font-weight: bold;
+            min-width: 200px;
+            font-size: 10pt;
+            padding-right: 10px;
+        }
+
+        .field-value {
+            flex: 1;
+            border-bottom: 1px dotted #000;
+            padding: 0 5px 2px 5px;
+            min-height: 20px;
+        }
+
+        .field-value.empty {
+            color: #999;
+            font-style: italic;
+        }
+
+        .checkbox-group {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            margin: 4px 0;
+        }
+
+        .checkbox {
+            width: 12px;
+            height: 12px;
+            border: 1.5px solid #000;
+            margin-right: 8px;
+            display: inline-block;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .checkbox.checked::after {
+            content: '✓';
+            position: absolute;
+            top: -3px;
+            left: 1px;
+            font-size: 11pt;
+            font-weight: bold;
+        }
+
+        .signature-section {
+            margin-top: 30px;
+            page-break-inside: avoid;
+        }
+
+        .declaration-text {
+            margin: 12px 0;
+            font-size: 10pt;
+            line-height: 1.5;
+            text-align: justify;
+            padding: 10px;
+            background: #fafafa;
+            border-left: 3px solid #000;
+        }
+
+        .signature-box {
+            border: 1.5px solid #000;
+            padding: 12px;
+            margin: 12px 0;
+            min-height: 70px;
+            background: white;
+        }
+
+        .signature-box strong {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 10pt;
+        }
+
+        .signature-line {
+            border-top: 1px solid #000;
+            margin-top: 40px;
+            padding-top: 5px;
+            text-align: center;
+            font-size: 9pt;
+        }
+
+        .footer {
+            position: absolute;
+            bottom: 15mm;
+            left: 20mm;
+            right: 20mm;
+            text-align: center;
+            font-size: 8pt;
+            color: #666;
+            border-top: 1px solid #ccc;
+            padding-top: 8px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 10pt;
+        }
+
+        table th {
+            background: #d0d0d0;
+            border: 1px solid #000;
+            padding: 6px;
+            text-align: left;
+            font-weight: bold;
+        }
+
+        table td {
+            border: 1px solid #000;
+            padding: 5px;
+        }
+
+        @media print {
+            body {
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact;
+            }
+
+            .page {
+                margin: 0;
+                box-shadow: none;
+            }
+
+            .page-break {
+                page-break-before: always;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page">
+        <!-- INTESTAZIONE -->
+        <div class="header">
+            <h1>C.I.L.A.</h1>
+            <div class="subtitle">Comunicazione Inizio Lavori Asseverata</div>
+            <div class="doc-number">
+                N. {{numero}} del {{data.oggi}}
+            </div>
+        </div>
+
+        <!-- RIFERIMENTO NORMATIVO -->
+        <div class="normative-box">
+            <strong>Art. 6-bis del D.P.R. 6 giugno 2001, n. 380</strong><br>
+            Testo Unico delle disposizioni legislative e regolamentari in materia edilizia
+        </div>
+
+        <!-- SEZIONE 1: DATI DEL COMMITTENTE -->
+        <div class="section">
+            <div class="section-title">1. Dati del Committente</div>
+
+            <div class="field-row">
+                <span class="field-label">Nome e Cognome / Ragione Sociale:</span>
+                <span class="field-value">{{cliente.nome}}</span>
+            </div>
+
+            <div class="field-row">
+                <span class="field-label">Codice Fiscale / Partita IVA:</span>
+                <span class="field-value">{{cliente.cf}}</span>
+            </div>
+
+            <div class="field-row">
+                <span class="field-label">Indirizzo di residenza/sede:</span>
+                <span class="field-value">{{cliente.indirizzo}}</span>
+            </div>
+        </div>
+
+        <!-- SEZIONE 2: DATI DELL'IMMOBILE -->
+        <div class="section">
+            <div class="section-title">2. Ubicazione e Identificazione dell'Immobile</div>
+
+            <div class="field-row">
+                <span class="field-label">Indirizzo dell'intervento:</span>
+                <span class="field-value">{{immobile.indirizzo}}</span>
+            </div>
+
+            <div class="field-row">
+                <span class="field-label">Dati catastali (Foglio, Particella, Sub):</span>
+                <span class="field-value">{{immobile.catasto}}</span>
+            </div>
+
+            <div class="field-row">
+                <span class="field-label">Zona urbanistica:</span>
+                <span class="field-value">{{immobile.zona}}</span>
+            </div>
+        </div>
+
+        <!-- SEZIONE 3: DESCRIZIONE DELL'INTERVENTO -->
+        <div class="section">
+            <div class="section-title">3. Descrizione dell'Intervento</div>
+
+            <div class="field-row">
+                <span class="field-label">Tipologia di intervento:</span>
+                <span class="field-value">{{intervento.tipo}}</span>
+            </div>
+
+            <div class="field-row">
+                <span class="field-label">Data prevista di inizio lavori:</span>
+                <span class="field-value">{{intervento.dataInizio}}</span>
+            </div>
+
+            <div class="field-row">
+                <span class="field-label">Durata prevista dei lavori (giorni):</span>
+                <span class="field-value">{{intervento.durata}}</span>
+            </div>
+
+            <div class="field-row">
+                <span class="field-label">Costo presunto dell'intervento (€):</span>
+                <span class="field-value">{{intervento.costo}}</span>
+            </div>
+
+            <div class="field-row">
+                <span class="field-label">Descrizione dettagliata dei lavori:</span>
+            </div>
+            <div style="border: 1px solid #000; padding: 8px; margin: 5px 0; min-height: 60px; background: white;">
+                {{intervento.descrizione}}
+            </div>
+
+            <div class="checkbox-group">
+                <strong>Caratteristiche dell'intervento:</strong>
+                <div class="checkbox-item">
+                    <span class="checkbox {{intervento.struttura}}"></span>
+                    <span>L'intervento interessa le parti strutturali dell'edificio</span>
+                </div>
+                <div class="checkbox-item">
+                    <span class="checkbox {{intervento.energia}}"></span>
+                    <span>L'intervento comporta modifiche dell'efficienza energetica</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- SEZIONE 4: TECNICO ASSEVERATORE -->
+        <div class="section">
+            <div class="section-title">4. Dati del Tecnico Asseveratore</div>
+
+            <div class="field-row">
+                <span class="field-label">Nome e Cognome:</span>
+                <span class="field-value">{{tecnico.nome}}</span>
+            </div>
+
+            <div class="field-row">
+                <span class="field-label">Qualifica professionale:</span>
+                <span class="field-value">{{tecnico.qualifica}}</span>
+            </div>
+
+            <div class="field-row">
+                <span class="field-label">Numero iscrizione all'Albo:</span>
+                <span class="field-value">{{tecnico.albo}}</span>
+            </div>
+
+            <div class="field-row">
+                <span class="field-label">Indirizzo PEC:</span>
+                <span class="field-value">{{tecnico.pec}}</span>
+            </div>
+        </div>
+
+        <!-- SEZIONE 5: DICHIARAZIONI -->
+        <div class="signature-section">
+            <div class="section-title">5. Asseverazioni e Dichiarazioni</div>
+
+            <div class="declaration-text">
+                Il sottoscritto tecnico abilitato <strong>DICHIARA</strong>, sotto la propria responsabilità,
+                ai sensi degli artt. 46 e 47 del D.P.R. 28 dicembre 2000, n. 445, che:
+                <ul style="margin: 8px 0 8px 20px;">
+                    <li>i lavori sono conformi agli strumenti urbanistici approvati e ai regolamenti edilizi vigenti;
+                    </li>
+                    <li>i lavori sono compatibili con la normativa in materia sismica e con quella sul rendimento
+                        energetico nell'edilizia;</li>
+                    <li>sono rispettate le norme di sicurezza e di quelle igienico-sanitarie.</li>
+                </ul>
+            </div>
+
+            <div class="signature-box">
+                <strong>Il Tecnico Asseveratore</strong>
+                <div class="signature-line">
+                    {{tecnico.nome}}<br>
+                    (Firma digitale o autografa)
+                </div>
+            </div>
+
+            <div class="signature-box">
+                <strong>Il Committente</strong>
+                <div class="signature-line">
+                    {{cliente.nome}}<br>
+                    (Firma per accettazione)
+                </div>
+            </div>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer">
+            <p>Documento generato da EdilSmart - Sistema di Gestione Cantieri</p>
+            <p>Data di generazione: {{data.oggi}} - Ora: {{data.ora}}</p>
+        </div>
+    </div>
+</body>
+
+</html>

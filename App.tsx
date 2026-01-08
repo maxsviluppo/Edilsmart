@@ -10,6 +10,8 @@ import ProjectDetails from './components/ProjectDetails';
 import ProjectSettings from './components/ProjectSettings';
 import Settings from './components/Settings'; // New Import
 import Statistics from './components/Statistics';
+import InvoicesQuotes from './components/InvoicesQuotes';
+import Documents from './components/Documents';
 import { HardHat, Clock, Calendar, DollarSign, User } from 'lucide-react';
 import { Project } from './types';
 
@@ -26,6 +28,7 @@ const App: React.FC = () => {
   const [selectedProjectId, setSelectedProjectId] = useState<string>(projects[0]?.id || '');
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
+  const [invoicesAction, setInvoicesAction] = useState<'new-quote' | undefined>(undefined);
 
   // Ensure a project is selected if list is not empty
   useEffect(() => {
@@ -73,10 +76,18 @@ const App: React.FC = () => {
         return <ComputoMetrico project={selectedProject} />;
       case 'cronoprogramma':
         return <Cronoprogramma project={selectedProject} />;
+      case 'invoices':
+        return <InvoicesQuotes projects={projects} initialAction={invoicesAction} />;
       case 'pricelists':
         return <PriceListManager />;
       case 'accounting':
-        return <Accounting />;
+        return <Accounting onCreateQuote={() => {
+          setActiveTab('invoices');
+          setInvoicesAction('new-quote');
+          setTimeout(() => setInvoicesAction(undefined), 100);
+        }} />;
+      case 'documents':
+        return <Documents projects={projects} selectedProjectId={selectedProjectId} />;
       case 'statistics':
         return <Statistics projects={projects} />;
       case 'projects':
@@ -208,7 +219,7 @@ const App: React.FC = () => {
       case 'settings':
         return <Settings />;
       default:
-        return <Dashboard />;
+        return <Dashboard projects={projects} />;
     }
   };
 

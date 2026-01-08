@@ -26,7 +26,11 @@ import {
 } from 'lucide-react';
 import { Expense, Supplier, SupplierInvoice } from '../types';
 
-const Accounting: React.FC = () => {
+interface AccountingProps {
+  onCreateQuote?: () => void;
+}
+
+const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
   const [transactions, setTransactions] = useState<Expense[]>([
     { id: '1', date: '2023-10-15', description: 'Acquisto Ferramenta', amount: -245.50, category: 'Materiali', status: 'Pagato' },
     { id: '2', date: '2023-10-14', description: 'Fattura Cliente - Acconto Lavori', amount: 5000.00, category: 'Ricavi', status: 'Pagato' },
@@ -519,7 +523,10 @@ const Accounting: React.FC = () => {
                 <h3 className="text-xl font-bold mb-4">Genera Preventivo Rapido</h3>
                 <p className="text-slate-400 text-sm mb-6">Crea una fattura pro-forma o un preventivo professionale basato sui dati del computo metrico.</p>
               </div>
-              <button className="bg-white text-slate-900 px-6 py-2 rounded-lg font-bold hover:bg-slate-100 transition-colors relative z-10 w-fit">
+              <button
+                onClick={onCreateQuote}
+                className="bg-white text-slate-900 px-6 py-2 rounded-lg font-bold hover:bg-slate-100 transition-colors relative z-10 w-fit"
+              >
                 Crea Ora
               </button>
               <div className="absolute top-0 right-0 p-8 opacity-10">

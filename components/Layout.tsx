@@ -13,7 +13,9 @@ import {
   Database,
   ChevronDown,
   Folder,
-  GanttChart
+  GanttChart,
+  FileText,
+  FileCheck
 } from 'lucide-react';
 import { Project } from '../types';
 
@@ -49,6 +51,8 @@ const Layout: React.FC<LayoutProps> = ({
     { id: 'projects', label: 'Cantieri', icon: HardHat },
     { id: 'computo', label: 'Computo Metrico', icon: Calculator },
     { id: 'cronoprogramma', label: 'Cronoprogramma', icon: GanttChart },
+    // { id: 'documents', label: 'Documenti', icon: FileCheck }, // Temporaneamente sospeso
+    { id: 'invoices', label: 'Fatture e Preventivi', icon: FileText },
     { id: 'accounting', label: 'Contabilità', icon: Receipt },
     { id: 'statistics', label: 'Statistiche', icon: PieChart },
     { id: 'pricelists', label: 'Prezziari', icon: Database },
