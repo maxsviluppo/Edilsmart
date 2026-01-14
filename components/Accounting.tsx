@@ -22,9 +22,13 @@ import {
   Users,
   FileText,
   ChevronRight,
-  Printer
+  Printer,
+  Building2,
+  Phone,
+  Mail
 } from 'lucide-react';
-import { Expense, Supplier, SupplierInvoice } from '../types';
+import { Expense, Supplier, Invoice } from '../types';
+import { addInvoice, deleteInvoice as deleteInvoiceSvc, loadInvoices } from '../services/invoiceService';
 import ConfirmModal from './ConfirmModal';
 import Toast, { ToastType } from './Toast';
 
@@ -44,7 +48,7 @@ const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
 
   const [activeTab, setActiveTab] = useState<'transactions' | 'invoices' | 'suppliers'>('transactions');
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [invoices, setInvoices] = useState<SupplierInvoice[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
 
   const [categories, setCategories] = useState<string[]>([
     'Materiali', 'Ricavi', 'Manodopera', 'Noleggi', 'Trasporti', 'Materiali Speciali', 'Altro'
@@ -66,9 +70,10 @@ const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
       try { setSuppliers(JSON.parse(savedSuppliers)); } catch (e) { }
     }
 
-    const savedInvoices = localStorage.getItem('edilsmart_invoices');
+    const savedInvoices = loadInvoices();
     if (savedInvoices) {
-      try { setInvoices(JSON.parse(savedInvoices)); } catch (e) { }
+      // Show supplier invoices (ricevuta) plus legacy ones (missing type)
+      setInvoices(savedInvoices.filter(i => i.type === 'ricevuta' || !i.type));
     }
 
     // Listen for settings updates
@@ -114,7 +119,7 @@ const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
   const [newSupplier, setNewSupplier] = useState<Partial<Supplier>>({ name: '', vatNumber: '', email: '', phone: '', category: '' });
 
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
-  const [newInvoice, setNewInvoice] = useState<Partial<SupplierInvoice>>({
+  const [newInvoice, setNewInvoice] = useState<any>({
     date: new Date().toISOString().split('T')[0],
     supplierId: '',
     status: 'Bozza'
@@ -226,31 +231,41 @@ const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
     e.preventDefault();
     if (newInvoice.supplierId && newInvoice.amount && newInvoice.number) {
       const supplier = suppliers.find(s => s.id === newInvoice.supplierId);
-      const invoice: SupplierInvoice = {
+      const invoice: Invoice = {
         id: Math.random().toString(36).substr(2, 9),
-        number: newInvoice.number!,
-        date: newInvoice.date!,
-        supplierId: newInvoice.supplierId!,
-        supplierName: supplier?.name || 'Sconosciuto',
-        amount: newInvoice.amount!,
-        description: newInvoice.description || `Fattura ${newInvoice.number} da ${supplier?.name}`,
-        status: newInvoice.status as any || 'Bozza'
+        number: newInvoice.number,
+        date: newInvoice.date,
+        type: 'ricevuta',
+        clientId: undefined,
+        clientName: supplier?.name || 'Sconosciuto',
+        supplierId: newInvoice.supplierId,
+        items: [{
+          id: Math.random().toString(36).substr(2, 9),
+          description: newInvoice.description || 'Fattura Fornitore',
+          quantity: 1,
+          unit: 'a_corpo',
+          unitPrice: newInvoice.amount,
+          amount: newInvoice.amount
+        }],
+        subtotal: newInvoice.amount,
+        taxRate: 0,
+        taxAmount: 0,
+        totalAmount: newInvoice.amount,
+        status: newInvoice.status || 'Bozza',
+        notes: newInvoice.description
       };
-      const updatedInvoices = [invoice, ...invoices];
-      setInvoices(updatedInvoices);
-      localStorage.setItem('edilsmart_invoices', JSON.stringify(updatedInvoices));
+
+      const updated = addInvoice(invoice);
+      setInvoices(updated.filter(i => i.type === 'ricevuta' || !i.type));
       setIsInvoiceModalOpen(false);
       setNewInvoice({ date: new Date().toISOString().split('T')[0], status: 'Bozza' });
-
-      // Optional: Auto-create expense? Let's keep it manual for now or add a prompt.
     }
   };
 
-  const deleteInvoice = (id: string) => {
+  const handleDeleteInvoice = (id: string) => {
     if (confirm('Eliminare questa fattura?')) {
-      const updated = invoices.filter(i => i.id !== id);
-      setInvoices(updated);
-      localStorage.setItem('edilsmart_invoices', JSON.stringify(updated));
+      const updated = deleteInvoiceSvc(id);
+      setInvoices(updated.filter(i => i.type === 'ricevuta' || !i.type));
     }
   };
 
@@ -961,11 +976,278 @@ const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
       )}
 
       {/* Placeholder for other tabs */}
-      {activeTab !== 'transactions' && (
-        <div className="flex flex-col items-center justify-center py-12 bg-white rounded-xl border border-dashed border-slate-300">
-          <p className="text-slate-500">Modulo in sviluppo: {activeTab}</p>
+      {activeTab === 'invoices' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="font-bold text-slate-800 text-lg">Archivio Fatture Fornitori</h3>
+            <button
+              onClick={() => setIsInvoiceModalOpen(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center shadow-sm transition-colors font-medium"
+            >
+              <Plus size={18} className="mr-2" />
+              Registra Fattura
+            </button>
+          </div>
+
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-slate-600 font-semibold border-b">
+                  <tr>
+                    <th className="px-6 py-4">Data</th>
+                    <th className="px-6 py-4">Numero</th>
+                    <th className="px-6 py-4">Fornitore</th>
+                    <th className="px-6 py-4">Descrizione</th>
+                    <th className="px-6 py-4 text-right">Importo</th>
+                    <th className="px-6 py-4 text-center">Stato</th>
+                    <th className="px-6 py-4 text-center">Azioni</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {invoices.length > 0 ? (
+                    invoices.map((inv) => (
+                      <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-6 py-4 text-slate-600">{inv.date}</td>
+                        <td className="px-6 py-4 font-mono font-medium text-slate-900">{inv.number}</td>
+                        <td className="px-6 py-4 text-slate-800 font-medium">
+                          <div className="flex items-center">
+                            <Building2 size={14} className="mr-2 text-slate-400" />
+                            {/* Handle clientName (new) or supplierName (legacy) */}
+                            {inv.clientName || (inv as any).supplierName || 'Sconosciuto'}
+                          </div>
+                        </td>
+                        {/* Handle notes (new) or description (legacy) */}
+                        <td className="px-6 py-4 text-slate-600 truncate max-w-xs">{inv.notes || (inv as any).description || '-'}</td>
+                        <td className="px-6 py-4 text-right font-bold text-slate-900">
+                          € {(inv.totalAmount || (inv as any).amount || 0).toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${inv.status === 'Pagata' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
+                              inv.status === 'Scaduta' ? 'bg-rose-100 text-rose-700 border-rose-200' :
+                                'bg-amber-100 text-amber-700 border-amber-200'
+                            }`}>
+                            {inv.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <button
+                            onClick={() => handleDeleteInvoice(inv.id)}
+                            className="p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                            title="Elimina Fattura"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
+                        <FileText size={48} className="mx-auto mb-3 text-slate-300" />
+                        Nessuna fattura registrata.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
+
+      {activeTab === 'suppliers' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="font-bold text-slate-800 text-lg">Rubrica Fornitori</h3>
+            <button
+              onClick={() => setIsSupplierModalOpen(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center shadow-sm transition-colors font-medium"
+            >
+              <Plus size={18} className="mr-2" />
+              Nuovo Fornitore
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {suppliers.length > 0 ? (
+              suppliers.map((supplier) => (
+                <div key={supplier.id} className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow group">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-blue-50 p-3 rounded-lg text-blue-600">
+                        <Building2 size={24} />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-slate-900">{supplier.name}</h4>
+                        <span className="text-xs text-slate-500 font-medium uppercase">{supplier.category || 'Generico'}</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => deleteSupplier(supplier.id)}
+                      className="text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 text-sm text-slate-600">
+                    {supplier.vatNumber && (
+                      <div className="flex items-center gap-2">
+                        <CreditCard size={14} className="text-slate-400" />
+                        <span>P.IVA: {supplier.vatNumber}</span>
+                      </div>
+                    )}
+                    {(supplier.email || supplier.phone) && <hr className="border-slate-100 my-2" />}
+                    {supplier.email && (
+                      <div className="flex items-center gap-2">
+                        <Mail size={14} className="text-slate-400" />
+                        <a href={`mailto:${supplier.email}`} className="hover:text-blue-600">{supplier.email}</a>
+                      </div>
+                    )}
+                    {supplier.phone && (
+                      <div className="flex items-center gap-2">
+                        <Phone size={14} className="text-slate-400" />
+                        <a href={`tel:${supplier.phone}`} className="hover:text-blue-600">{supplier.phone}</a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="col-span-full py-12 text-center text-slate-400 bg-white rounded-xl border border-dashed border-slate-300">
+                <Users size={48} className="mx-auto mb-3 text-slate-300" />
+                <p>Nessun fornitore in rubrica.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {/* Supplier Modal */}
+      {isSupplierModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-6 border-b flex justify-between items-center bg-slate-50">
+              <h3 className="text-lg font-bold text-slate-800 flex items-center">
+                <Users className="mr-2 text-blue-600" size={20} />
+                Nuovo Fornitore
+              </h3>
+              <button onClick={() => setIsSupplierModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+            </div>
+            <form onSubmit={handleCreateSupplier} className="p-6 space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Ragione Sociale / Nome</label>
+                <input type="text" required autoFocus className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                  value={newSupplier.name || ''} onChange={e => setNewSupplier({ ...newSupplier, name: e.target.value })} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Partita IVA</label>
+                  <input type="text" className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={newSupplier.vatNumber || ''} onChange={e => setNewSupplier({ ...newSupplier, vatNumber: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Categoria</label>
+                  <select className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                    value={newSupplier.category || ''} onChange={e => setNewSupplier({ ...newSupplier, category: e.target.value })}>
+                    <option value="">-- Seleziona --</option>
+                    <option value="Materiali Edili">Materiali Edili</option>
+                    <option value="Noleggi">Noleggi</option>
+                    <option value="Impiantistica">Impiantistica</option>
+                    <option value="Professionista">Professionista</option>
+                    <option value="Altro">Altro</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Email</label>
+                  <input type="email" className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={newSupplier.email || ''} onChange={e => setNewSupplier({ ...newSupplier, email: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Telefono</label>
+                  <input type="tel" className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={newSupplier.phone || ''} onChange={e => setNewSupplier({ ...newSupplier, phone: e.target.value })} />
+                </div>
+              </div>
+              <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl mt-2">Salva Fornitore</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Invoice Modal */}
+      {isInvoiceModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-6 border-b flex justify-between items-center bg-slate-50">
+              <h3 className="text-lg font-bold text-slate-800 flex items-center">
+                <FileText className="mr-2 text-blue-600" size={20} />
+                Registra Fattura Fornitore
+              </h3>
+              <button onClick={() => setIsInvoiceModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+            </div>
+            <form onSubmit={handleCreateInvoice} className="p-6 space-y-4">
+              <div className="bg-amber-50 p-3 rounded-lg border border-amber-100 flex gap-2">
+                <AlertCircle className="text-amber-600 shrink-0" size={18} />
+                <p className="text-xs text-amber-800">
+                  Stai registrando una fattura ricevuta. Per gestire i pagamenti, ricorda di aggiornare lo stato o creare un movimento di uscita collegato.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Fornitore</label>
+                  <select required className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                    value={newInvoice.supplierId || ''} onChange={e => setNewInvoice({ ...newInvoice, supplierId: e.target.value })}>
+                    <option value="">-- Seleziona --</option>
+                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Numero Fattura</label>
+                  <input type="text" required className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={newInvoice.number || ''} onChange={e => setNewInvoice({ ...newInvoice, number: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Data Fattura</label>
+                  <input type="date" required className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={newInvoice.date || ''} onChange={e => setNewInvoice({ ...newInvoice, date: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Importo Totale (€)</label>
+                  <input type="number" step="0.01" required className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={newInvoice.amount || ''} onChange={e => setNewInvoice({ ...newInvoice, amount: parseFloat(e.target.value) })} />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Descrizione / Note</label>
+                <textarea className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none resize-none h-20"
+                  placeholder="Dettagli sulla fornitura..."
+                  value={newInvoice.description || ''} onChange={e => setNewInvoice({ ...newInvoice, description: e.target.value })} />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Stato Pagamento</label>
+                <select className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                  value={newInvoice.status || 'Bozza'} onChange={e => setNewInvoice({ ...newInvoice, status: e.target.value as any })}>
+                  <option value="Bozza">Bozza</option>
+                  <option value="In Scadenza">In Scadenza</option>
+                  <option value="Scaduta">Scaduta</option>
+                  <option value="Pagata">Pagata</option>
+                </select>
+              </div>
+
+              <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl mt-2">Registra Fattura</button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Confirm Delete Modal */}
       <ConfirmModal
         isOpen={!!deletingTransactionId}

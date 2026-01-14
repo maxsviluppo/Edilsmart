@@ -95,8 +95,8 @@ const InvoicesQuotes: React.FC<InvoicesQuotesProps> = ({ projects, initialTab, i
                 const search = searchTerm.toLowerCase();
                 return (
                     invoice.number.toLowerCase().includes(search) ||
-                    invoice.clientName.toLowerCase().includes(search) ||
-                    invoice.items.some(item => item.description.toLowerCase().includes(search))
+                    invoice.clientName?.toLowerCase().includes(search) ||
+                    invoice.items?.some(item => item.description.toLowerCase().includes(search))
                 );
             }
 
@@ -156,12 +156,12 @@ const InvoicesQuotes: React.FC<InvoicesQuotesProps> = ({ projects, initialTab, i
         const ricevute = filtered.filter(i => i.type === 'ricevuta');
 
         return {
-            totalEmesse: emesse.reduce((sum, inv) => sum + inv.totalAmount, 0),
-            totalRicevute: ricevute.reduce((sum, inv) => sum + inv.totalAmount, 0),
+            totalEmesse: emesse.reduce((sum, inv) => sum + (inv.totalAmount || 0), 0),
+            totalRicevute: ricevute.reduce((sum, inv) => sum + (inv.totalAmount || 0), 0),
             countEmesse: emesse.length,
             countRicevute: ricevute.length,
-            pending: filtered.filter(i => i.status === 'Emessa').reduce((sum, inv) => sum + inv.totalAmount, 0),
-            overdue: filtered.filter(i => i.status === 'Scaduta').reduce((sum, inv) => sum + inv.totalAmount, 0)
+            pending: filtered.filter(i => i.status === 'Emessa').reduce((sum, inv) => sum + (inv.totalAmount || 0), 0),
+            overdue: filtered.filter(i => i.status === 'Scaduta').reduce((sum, inv) => sum + (inv.totalAmount || 0), 0)
         };
     }, [invoices, selectedProjectId]);
 
@@ -469,7 +469,7 @@ const InvoicesQuotes: React.FC<InvoicesQuotesProps> = ({ projects, initialTab, i
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-2">
                                             {invoice.type === 'emessa' ? <User size={14} className="text-slate-400" /> : <Building2 size={14} className="text-slate-400" />}
-                                            <span className="text-slate-900">{invoice.clientName}</span>
+                                            <span className="text-slate-900">{invoice.clientName || 'Sconosciuto'}</span>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-slate-600">
@@ -479,7 +479,7 @@ const InvoicesQuotes: React.FC<InvoicesQuotesProps> = ({ projects, initialTab, i
                                         {invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString('it-IT') : '-'}
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className="font-semibold text-slate-900">€ {invoice.totalAmount.toLocaleString()}</span>
+                                        <span className="font-semibold text-slate-900">€ {(invoice.totalAmount || 0).toLocaleString()}</span>
                                     </td>
                                     <td className="px-6 py-4">
                                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${getStatusColor(invoice.status)}`}>
