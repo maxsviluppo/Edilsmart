@@ -12,6 +12,7 @@ import Settings from './components/Settings'; // New Import
 import Statistics from './components/Statistics';
 import InvoicesQuotes from './components/InvoicesQuotes';
 import Documents from './components/Documents';
+import Payroll from './components/Payroll';
 import { HardHat, Clock, Calendar, DollarSign, User } from 'lucide-react';
 import { Project } from './types';
 
@@ -25,19 +26,13 @@ const App: React.FC = () => {
     { id: '4', name: 'Manutenzione Straordinaria Tetto', client: 'Condominio Parco', status: 'Completato', budget: 28000, startDate: '2023-11-05', endDate: '2024-02-20', iva: 20, progress: 100, totalExpenses: 22000, revenue: 28000 },
   ]);
 
-  const [selectedProjectId, setSelectedProjectId] = useState<string>(projects[0]?.id || '');
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [invoicesAction, setInvoicesAction] = useState<'new-quote' | undefined>(undefined);
 
-  // Ensure a project is selected if list is not empty
-  useEffect(() => {
-    if (!selectedProjectId && projects.length > 0) {
-      setSelectedProjectId(projects[0].id);
-    }
-  }, [projects, selectedProjectId]);
-
   const selectedProject = projects.find(p => p.id === selectedProjectId);
+  const visibleProjects = selectedProjectId ? projects.filter(p => p.id === selectedProjectId) : projects;
 
   const handleNewProject = () => {
     setIsNewProjectModalOpen(true);
@@ -55,7 +50,7 @@ const App: React.FC = () => {
 
   const handleDeleteProject = (projectId: string) => {
     setProjects(projects.filter(p => p.id !== projectId));
-    setSelectedProjectId(projects.filter(p => p.id !== projectId)[0]?.id || '');
+    setSelectedProjectId('');
     setActiveTab('projects');
   };
 
@@ -71,13 +66,13 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard projects={projects} />;
+        return <Dashboard projects={visibleProjects} />;
       case 'computo':
         return <ComputoMetrico project={selectedProject} />;
       case 'cronoprogramma':
         return <Cronoprogramma project={selectedProject} />;
       case 'invoices':
-        return <InvoicesQuotes projects={projects} initialAction={invoicesAction} />;
+        return <InvoicesQuotes projects={projects} selectedProjectId={selectedProjectId} initialAction={invoicesAction} />;
       case 'pricelists':
         return <PriceListManager />;
       case 'accounting':
@@ -89,7 +84,9 @@ const App: React.FC = () => {
       case 'documents':
         return <Documents projects={projects} selectedProjectId={selectedProjectId} />;
       case 'statistics':
-        return <Statistics projects={projects} />;
+        return <Statistics projects={visibleProjects} />;
+      case 'payroll':
+        return <Payroll projects={visibleProjects} />;
       case 'projects':
         return (
           <div className="space-y-6">

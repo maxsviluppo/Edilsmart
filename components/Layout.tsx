@@ -5,6 +5,7 @@ import {
   HardHat,
   Calculator,
   Receipt,
+  Wallet,
   PieChart,
   Settings,
   Menu,
@@ -55,6 +56,7 @@ const Layout: React.FC<LayoutProps> = ({
     { id: 'invoices', label: 'Fatture e Preventivi', icon: FileText },
     { id: 'accounting', label: 'Contabilità', icon: Receipt },
     { id: 'statistics', label: 'Statistiche', icon: PieChart },
+    { id: 'payroll', label: 'Paghe e Stipendi', icon: Wallet },
     { id: 'pricelists', label: 'Prezziari', icon: Database },
   ];
 
@@ -115,7 +117,7 @@ const Layout: React.FC<LayoutProps> = ({
                   overflow: 'hidden'
                 }}
               >
-                <option value="" disabled>Seleziona Cantiere</option>
+                <option value="">Tutti i cantieri</option>
                 {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
               <Folder size={18} className="absolute left-3 top-3 text-slate-400 group-hover:text-blue-400 transition-colors" />

@@ -31,9 +31,10 @@ interface InvoicesQuotesProps {
     projects: Project[];
     initialTab?: 'invoices' | 'quotes' | 'clients';
     initialAction?: 'new-quote';
+    selectedProjectId?: string;
 }
 
-const InvoicesQuotes: React.FC<InvoicesQuotesProps> = ({ projects, initialTab, initialAction }) => {
+const InvoicesQuotes: React.FC<InvoicesQuotesProps> = ({ projects, initialTab, initialAction, selectedProjectId }) => {
     const [activeTab, setActiveTab] = useState<'invoices' | 'quotes' | 'clients'>(initialTab || 'invoices');
     const [invoiceType, setInvoiceType] = useState<'all' | 'emessa' | 'ricevuta'>('all');
     const [searchTerm, setSearchTerm] = useState('');
@@ -85,6 +86,8 @@ const InvoicesQuotes: React.FC<InvoicesQuotesProps> = ({ projects, initialTab, i
     // Filtri avanzati
     const filteredInvoices = useMemo(() => {
         return invoices.filter(invoice => {
+            if (activeTab === 'invoices' && selectedProjectId && invoice.projectId !== selectedProjectId) return false;
+
             if (invoiceType !== 'all' && invoice.type !== invoiceType) return false;
             if (statusFilter !== 'all' && invoice.status !== statusFilter) return false;
 
@@ -107,10 +110,12 @@ const InvoicesQuotes: React.FC<InvoicesQuotesProps> = ({ projects, initialTab, i
 
             return true;
         });
-    }, [invoices, invoiceType, statusFilter, searchTerm, dateFilter]);
+    }, [invoices, invoiceType, statusFilter, searchTerm, dateFilter, selectedProjectId, activeTab]);
 
     const filteredQuotes = useMemo(() => {
         return quotes.filter(quote => {
+            if (activeTab === 'quotes' && selectedProjectId && quote.projectId !== selectedProjectId) return false;
+
             if (statusFilter !== 'all' && quote.status !== statusFilter) return false;
 
             if (searchTerm) {
@@ -124,7 +129,7 @@ const InvoicesQuotes: React.FC<InvoicesQuotesProps> = ({ projects, initialTab, i
 
             return true;
         });
-    }, [quotes, statusFilter, searchTerm]);
+    }, [quotes, statusFilter, searchTerm, selectedProjectId, activeTab]);
 
     const filteredClients = useMemo(() => {
         return clients.filter(client => {
@@ -142,27 +147,37 @@ const InvoicesQuotes: React.FC<InvoicesQuotesProps> = ({ projects, initialTab, i
 
     // Statistiche
     const invoiceStats = useMemo(() => {
-        const emesse = invoices.filter(i => i.type === 'emessa');
-        const ricevute = invoices.filter(i => i.type === 'ricevuta');
+        let filtered = invoices;
+        if (selectedProjectId) {
+            filtered = invoices.filter(i => i.projectId === selectedProjectId);
+        }
+
+        const emesse = filtered.filter(i => i.type === 'emessa');
+        const ricevute = filtered.filter(i => i.type === 'ricevuta');
 
         return {
             totalEmesse: emesse.reduce((sum, inv) => sum + inv.totalAmount, 0),
             totalRicevute: ricevute.reduce((sum, inv) => sum + inv.totalAmount, 0),
             countEmesse: emesse.length,
             countRicevute: ricevute.length,
-            pending: invoices.filter(i => i.status === 'Emessa').reduce((sum, inv) => sum + inv.totalAmount, 0),
-            overdue: invoices.filter(i => i.status === 'Scaduta').reduce((sum, inv) => sum + inv.totalAmount, 0)
+            pending: filtered.filter(i => i.status === 'Emessa').reduce((sum, inv) => sum + inv.totalAmount, 0),
+            overdue: filtered.filter(i => i.status === 'Scaduta').reduce((sum, inv) => sum + inv.totalAmount, 0)
         };
-    }, [invoices]);
+    }, [invoices, selectedProjectId]);
 
     const quoteStats = useMemo(() => {
+        let filtered = quotes;
+        if (selectedProjectId) {
+            filtered = quotes.filter(q => q.projectId === selectedProjectId);
+        }
+
         return {
-            total: quotes.reduce((sum, q) => sum + q.totalAmount, 0),
-            accepted: quotes.filter(q => q.status === 'Accettato').length,
-            pending: quotes.filter(q => q.status === 'Inviato').length,
-            draft: quotes.filter(q => q.status === 'Bozza').length
+            total: filtered.reduce((sum, q) => sum + q.totalAmount, 0),
+            accepted: filtered.filter(q => q.status === 'Accettato').length,
+            pending: filtered.filter(q => q.status === 'Inviato').length,
+            draft: filtered.filter(q => q.status === 'Bozza').length
         };
-    }, [quotes]);
+    }, [quotes, selectedProjectId]);
 
     // Handlers
     const handleNewInvoice = () => {

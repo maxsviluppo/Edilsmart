@@ -62,16 +62,16 @@ const Documents: React.FC<DocumentsProps> = ({ projects, selectedProjectId }) =>
 
         if (selectedProjectId) {
             const project = projects.find(p => p.id === selectedProjectId);
-            setSelectedProject(project || projects[0] || null);
+            setSelectedProject(project || null);
         } else {
-            setSelectedProject(projects[0] || null);
+            setSelectedProject(null);
         }
     }, [projects, selectedProjectId]);
 
     const projectDocuments = useMemo(() => {
-        if (!selectedProject) return [];
+        if (!selectedProject) return documents;
         return documents.filter(doc => doc.projectId === selectedProject.id);
-    }, [documents, selectedProject]);
+    }, [documents, selectedProject, selectedProjectId]); // Added selectedProjectId just in case, logic depends on selectedProject state
 
     const filteredDocuments = useMemo(() => {
         return projectDocuments.filter(doc => {
@@ -216,42 +216,34 @@ const Documents: React.FC<DocumentsProps> = ({ projects, selectedProjectId }) =>
         }
     };
 
-    if (!selectedProject) {
-        return (
-            <div className="flex items-center justify-center h-96">
-                <div className="text-center">
-                    <FolderOpen className="mx-auto text-slate-300 mb-4" size={64} />
-                    <p className="text-slate-500 font-medium">Nessun progetto selezionato</p>
-                    <p className="text-slate-400 text-sm mt-2">Seleziona un progetto per gestire i documenti</p>
-                </div>
-            </div>
-        );
-    }
-
     return (
         <div className="space-y-6">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-slate-900 mb-2">Documenti e Certificazioni</h1>
-                    <p className="text-slate-600">Gestione documentale per {selectedProject.name}</p>
+                    <p className="text-slate-600">Gestione documentale per {selectedProject ? selectedProject.name : 'Tutti i cantieri'}</p>
                 </div>
                 <div className="flex gap-3">
                     <select
-                        value={selectedProject.id}
+                        value={selectedProject?.id || ''}
                         onChange={(e) => {
                             const project = projects.find(p => p.id === e.target.value);
                             setSelectedProject(project || null);
                         }}
                         className="px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
                     >
+                        <option value="">Tutti i cantieri</option>
                         {projects.map(project => (
                             <option key={project.id} value={project.id}>{project.name}</option>
                         ))}
                     </select>
                     <button
-                        onClick={() => setShowNewDocModal(true)}
-                        className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold flex items-center gap-2 transition-colors shadow-sm"
+                        onClick={() => {
+                            if (selectedProject) setShowNewDocModal(true);
+                            else setToast({ message: 'Seleziona un progetto per creare un documento', type: 'warning' });
+                        }}
+                        className={`px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition-colors shadow-sm ${selectedProject ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
                     >
                         <Plus size={20} />
                         Nuovo Documento

@@ -24,6 +24,8 @@ export interface Expense {
   amount: number;
   category: string; // Changed to string to support dynamic categories
   status: 'Pagato' | 'In Attesa';
+  invoiceNumber?: string;
+  paymentType?: 'Acconto' | 'Saldo' | 'Unica Soluzione';
 }
 
 export interface Project {
@@ -376,4 +378,21 @@ export interface Region {
   name: string;
   hasOfficialPriceList: boolean;
   priceListUrl?: string;
+}
+
+export interface Employee {
+  id: string;
+  name: string;
+  role: string;
+  hourlyRate: number;
+}
+
+export interface PayrollEntry {
+  id: string;
+  date: string;
+  employeeId: string;
+  amount?: number;
+  hours?: number;
+  projectId?: string; // Optional: associated project
+  notes?: string;
 }

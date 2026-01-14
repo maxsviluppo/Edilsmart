@@ -81,7 +81,18 @@ const ComputoMetrico: React.FC<ComputoMetricoProps> = ({ project }) => {
   };
 
   const updateRow = (id: string, field: keyof ComputoRow, value: any) => {
-    setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
+    setRows(prev => prev.map(r => {
+      if (r.id === id) {
+        const updated = { ...r, [field]: value };
+        // Recalculate total if price changes
+        if (field === 'price') {
+          const price = typeof value === 'number' ? value : parseFloat(value) || 0;
+          updated.total = parseFloat((updated.quantity * price).toFixed(2));
+        }
+        return updated;
+      }
+      return r;
+    }));
 
     if (field === 'code' || field === 'description') {
       if (!region) return;
@@ -361,17 +372,27 @@ const ComputoMetrico: React.FC<ComputoMetricoProps> = ({ project }) => {
 
                   {/* Quantity */}
                   <td className="border-r border-emerald-600/50 p-2 text-right font-bold align-top">
-                    {row.quantity ? row.quantity.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}
+                    {row.quantity ? row.quantity.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
                   </td>
 
-                  {/* Unit Price */}
-                  <td className="border-r border-emerald-600/50 p-2 text-right align-top text-slate-600">
-                    {row.price ? row.price.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}
+                  {/* Unit Price - Now Editable */}
+                  <td className="border-r border-emerald-600/50 p-2 text-right align-top text-slate-600 hover:bg-emerald-50/10">
+                    <input
+                      type="number"
+                      className="w-full text-right bg-transparent focus:bg-emerald-50 outline-none print:hidden mb-1"
+                      placeholder="0.00"
+                      value={row.price || ''}
+                      onChange={(e) => updateRow(row.id, 'price', e.target.value)}
+                      step="0.01"
+                    />
+                    <div className="hidden print:block">
+                      {row.price ? row.price.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                    </div>
                   </td>
 
                   {/* Total Price */}
                   <td className="p-2 text-right font-bold align-top text-emerald-900 bg-emerald-50/10">
-                    {row.total ? row.total.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}
+                    {row.total ? row.total.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
                   </td>
                 </tr>
               ))}

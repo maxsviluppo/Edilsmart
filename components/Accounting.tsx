@@ -25,6 +25,8 @@ import {
   Printer
 } from 'lucide-react';
 import { Expense, Supplier, SupplierInvoice } from '../types';
+import ConfirmModal from './ConfirmModal';
+import Toast, { ToastType } from './Toast';
 
 interface AccountingProps {
   onCreateQuote?: () => void;
@@ -105,6 +107,8 @@ const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
     status: 'In Attesa'
   });
 
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+
   // Supplier & Invoice States
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
   const [newSupplier, setNewSupplier] = useState<Partial<Supplier>>({ name: '', vatNumber: '', email: '', phone: '', category: '' });
@@ -113,7 +117,6 @@ const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
   const [newInvoice, setNewInvoice] = useState<Partial<SupplierInvoice>>({
     date: new Date().toISOString().split('T')[0],
     supplierId: '',
-    items: [],
     status: 'Bozza'
   });
 
@@ -172,7 +175,9 @@ const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
         description: newTransaction.description,
         amount: newTransaction.amount,
         category: newTransaction.category || 'Altro',
-        status: newTransaction.status as 'Pagato' | 'In Attesa' || 'In Attesa'
+        status: newTransaction.status as 'Pagato' | 'In Attesa' || 'In Attesa',
+        invoiceNumber: newTransaction.invoiceNumber,
+        paymentType: newTransaction.paymentType
       };
       setTransactions([transaction, ...transactions]);
       setIsNewTransactionModalOpen(false);
@@ -181,7 +186,9 @@ const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
         description: '',
         amount: 0,
         category: categories[0] || 'Altro',
-        status: 'In Attesa'
+        status: 'In Attesa',
+        invoiceNumber: '',
+        paymentType: undefined
       });
     }
   };
@@ -250,6 +257,7 @@ const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
   const handleDeleteTransaction = (id: string) => {
     setTransactions(transactions.filter(t => t.id !== id));
     setDeletingTransactionId(null);
+    setToast({ message: 'Registrazione eliminata con successo', type: 'success' });
   };
 
   const clearFilters = () => {
@@ -457,7 +465,14 @@ const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
                             {t.date}
                           </td>
                           <td className={`px-6 py-4 font-medium ${isEditing ? 'text-blue-900' : 'text-slate-800'}`}>
-                            {t.description}
+                            <div>{t.description}</div>
+                            {(t.invoiceNumber || t.paymentType) && (
+                              <div className="text-xs text-slate-500 mt-1 flex gap-2">
+                                {t.invoiceNumber && <span>Fatt. {t.invoiceNumber}</span>}
+                                {t.invoiceNumber && t.paymentType && <span>•</span>}
+                                {t.paymentType && <span className="uppercase">{t.paymentType}</span>}
+                              </div>
+                            )}
                             {isEditing && (
                               <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-600 text-white animate-pulse">
                                 IN MODIFICA
@@ -626,6 +641,34 @@ const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
                       onChange={(e) => setEditingTransaction({ ...editingTransaction, description: e.target.value })}
                     />
                   </div>
+
+                  {(editingTransaction.amount || 0) >= 0 && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-500 uppercase">N. Fattura (Opzionale)</label>
+                        <input
+                          type="text"
+                          placeholder="Es: 2024/001"
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                          value={editingTransaction.invoiceNumber || ''}
+                          onChange={(e) => setEditingTransaction({ ...editingTransaction, invoiceNumber: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-500 uppercase">Tipo Incasso</label>
+                        <select
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white"
+                          value={editingTransaction.paymentType || ''}
+                          onChange={(e) => setEditingTransaction({ ...editingTransaction, paymentType: e.target.value as any })}
+                        >
+                          <option value="">-- Seleziona --</option>
+                          <option value="Acconto">Acconto</option>
+                          <option value="Saldo">Saldo</option>
+                          <option value="Unica Soluzione">Unica Soluzione</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
@@ -827,13 +870,55 @@ const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
                     />
                   </div>
 
+                  {(newTransaction.amount || 0) >= 0 && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-500 uppercase">N. Fattura (Opzionale)</label>
+                        <input
+                          type="text"
+                          placeholder="Es: 2024/001"
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                          value={newTransaction.invoiceNumber || ''}
+                          onChange={(e) => setNewTransaction({ ...newTransaction, invoiceNumber: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-500 uppercase">Tipo Incasso</label>
+                        <select
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white"
+                          value={newTransaction.paymentType || ''}
+                          onChange={(e) => setNewTransaction({ ...newTransaction, paymentType: e.target.value as any })}
+                        >
+                          <option value="">-- Seleziona --</option>
+                          <option value="Acconto">Acconto</option>
+                          <option value="Saldo">Saldo</option>
+                          <option value="Unica Soluzione">Unica Soluzione</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <label className="text-xs font-bold text-slate-500 uppercase">Categoria</label>
                       <select
                         className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white"
                         value={newTransaction.category}
-                        onChange={(e) => setNewTransaction({ ...newTransaction, category: e.target.value })}
+                        onChange={(e) => {
+                          const cat = e.target.value;
+                          const isIncome = cat === 'Ricavi';
+                          const currentAmount = Math.abs(newTransaction.amount || 0);
+
+                          setNewTransaction({
+                            ...newTransaction,
+                            category: cat,
+                            // Auto-switch based on category, but preserve amount value
+                            amount: isIncome ? currentAmount : -currentAmount,
+                            // Reset invoice fields if switching to expense (optional, but cleaner)
+                            invoiceNumber: isIncome ? newTransaction.invoiceNumber : '',
+                            paymentType: isIncome ? newTransaction.paymentType : undefined
+                          });
+                        }}
                       >
                         {categories.map(cat => (
                           <option key={cat} value={cat}>{cat}</option>
@@ -880,6 +965,30 @@ const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
         <div className="flex flex-col items-center justify-center py-12 bg-white rounded-xl border border-dashed border-slate-300">
           <p className="text-slate-500">Modulo in sviluppo: {activeTab}</p>
         </div>
+      )}
+      {/* Confirm Delete Modal */}
+      <ConfirmModal
+        isOpen={!!deletingTransactionId}
+        title="Elimina Registrazione"
+        message="Sei sicuro di voler eliminare questa registrazione contabile? Questa azione non può essere annullata."
+        confirmText="Elimina"
+        cancelText="Annulla"
+        type="danger"
+        onConfirm={() => {
+          if (deletingTransactionId) {
+            handleDeleteTransaction(deletingTransactionId);
+          }
+        }}
+        onCancel={() => setDeletingTransactionId(null)}
+      />
+
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
       )}
     </div>
   );
