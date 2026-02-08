@@ -30,7 +30,14 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
         color: '#3b82f6'
     });
 
-    const [draggingTask, setDraggingTask] = useState<{ id: string; startX: number; startProgress: number; barWidth: number } | null>(null);
+    const [draggingTask, setDraggingTask] = useState<{
+        id: string;
+        startX: number;
+        startProgress?: number;
+        startEndDate?: string;
+        barWidth: number;
+        mode: 'progress' | 'resize'
+    } | null>(null);
 
     const statusColors = {
         planned: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-300' },
@@ -106,16 +113,112 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
         setDeletingTaskId(null);
     };
 
+    // Helper Functions
+    const getDateRange = () => {
+        if (tasks.length === 0) {
+            const todayDate = new Date();
+            const nextMonth = new Date(todayDate);
+            nextMonth.setMonth(nextMonth.getMonth() + 1);
+            return { minDate: todayDate, maxDate: nextMonth };
+        }
+
+        const dates = tasks.flatMap(t => [new Date(t.startDate), new Date(t.endDate)]);
+        return {
+            minDate: new Date(Math.min(...dates.map(d => d.getTime()))),
+            maxDate: new Date(Math.max(...dates.map(d => d.getTime())))
+        };
+    };
+
+    const { minDate, maxDate } = getDateRange();
+    const totalDaysInRange = Math.ceil((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+    const calculateTaskPosition = (task: Task) => {
+        const taskStart = new Date(task.startDate);
+        const taskEnd = new Date(task.endDate);
+        const startOffset = Math.max(0, Math.ceil((taskStart.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)));
+        const duration = Math.ceil((taskEnd.getTime() - taskStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+        const leftPercent = (startOffset / totalDaysInRange) * 100;
+        const widthPercent = (duration / totalDaysInRange) * 100;
+
+        const maxWidth = 100 - leftPercent;
+        const finalWidth = Math.min(widthPercent, maxWidth);
+
+        return { left: `${leftPercent}%`, width: `${finalWidth}%` };
+    };
+
+    const generateTimelineData = () => {
+        const months: { label: string; width: number; days: { date: number; width: number; isWeekend: boolean }[] }[] = [];
+        const current = new Date(minDate);
+        current.setDate(1);
+
+        while (current <= maxDate) {
+            const monthStart = new Date(current);
+            const monthEnd = new Date(current.getFullYear(), current.getMonth() + 1, 0);
+            const effectiveStart = monthStart < minDate ? minDate : monthStart;
+            const effectiveEnd = monthEnd > maxDate ? maxDate : monthEnd;
+            const monthDaysCount = Math.ceil((effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+            const monthDays: { date: number; width: number; isWeekend: boolean }[] = [];
+            for (let d = new Date(effectiveStart); d <= effectiveEnd; d.setDate(d.getDate() + 1)) {
+                monthDays.push({
+                    date: d.getDate(),
+                    width: (1 / totalDaysInRange) * 100,
+                    isWeekend: d.getDay() === 0 || d.getDay() === 6
+                });
+            }
+
+            months.push({
+                label: monthStart.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' }),
+                width: (monthDaysCount / totalDaysInRange) * 100,
+                days: monthDays
+            });
+            current.setMonth(current.getMonth() + 1);
+        }
+        return months;
+    };
+
+    const timelineData = generateTimelineData();
+    const today = new Date();
+    const isTodayInRange = today >= minDate && today <= maxDate;
+    const todayPosition = isTodayInRange
+        ? (Math.ceil((today.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)) / totalDaysInRange) * 100
+        : null;
+
     // Drag to update progress logic
     useEffect(() => {
         const handleMouseMove = (e: MouseEvent) => {
             if (!draggingTask) return;
 
             const deltaX = e.clientX - draggingTask.startX;
-            const percentageChange = (deltaX / draggingTask.barWidth) * 100;
-            const newProgress = Math.max(0, Math.min(100, Math.round(draggingTask.startProgress + percentageChange)));
 
-            updateTask(draggingTask.id, { progress: newProgress });
+            if (draggingTask.mode === 'progress') {
+                const percentageChange = (deltaX / draggingTask.barWidth) * 100;
+                const newProgress = Math.max(0, Math.min(100, Math.round((draggingTask.startProgress || 0) + percentageChange)));
+                updateTask(draggingTask.id, { progress: newProgress });
+            } else if (draggingTask.mode === 'resize') {
+                // Calculate days from pixels
+                const totalDaysRange = Math.ceil((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                const containerWidth = draggingTask.barWidth / (tasks.find(t => t.id === draggingTask.id)?.progress ? 1 : 1); // This is actually the chart width
+                // We need the container width. Let's assume barWidth passed was the chart width or calculate differently
+                // Actually, let's use a simpler approach: deltaX / (chartWidth / totalDaysRange) = days
+                const chartElement = document.querySelector('.gantt-chart-area');
+                if (chartElement) {
+                    const chartWidth = chartElement.getBoundingClientRect().width;
+                    const pixelsPerDay = chartWidth / totalDaysRange;
+                    const daysChange = Math.round(deltaX / pixelsPerDay);
+
+                    const originalEndDate = new Date(draggingTask.startEndDate!);
+                    const newEndDate = new Date(originalEndDate);
+                    newEndDate.setDate(originalEndDate.getDate() + daysChange);
+
+                    // Validation: end date must be after start date
+                    const task = tasks.find(t => t.id === draggingTask.id);
+                    if (task && newEndDate > new Date(task.startDate)) {
+                        updateTask(draggingTask.id, { endDate: newEndDate.toISOString().split('T')[0] });
+                    }
+                }
+            }
         };
 
         const handleMouseUp = () => {
@@ -137,9 +240,10 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [draggingTask]);
+    }, [draggingTask, tasks, minDate, maxDate]);
 
     const handleProgressMouseDown = (e: React.MouseEvent, task: Task) => {
+        e.stopPropagation();
         const barElement = e.currentTarget as HTMLElement;
         const rect = barElement.getBoundingClientRect();
 
@@ -147,82 +251,23 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
             id: task.id,
             startX: e.clientX,
             startProgress: task.progress,
-            barWidth: rect.width
+            barWidth: rect.width,
+            mode: 'progress'
         });
     };
 
+    const handleResizeMouseDown = (e: React.MouseEvent, task: Task) => {
+        e.stopPropagation();
+        const chartElement = document.querySelector('.gantt-chart-area');
+        if (!chartElement) return;
 
-    const calculateTaskPosition = (task: Task, minDate: Date, maxDate: Date) => {
-        const totalDays = Math.ceil((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-        const taskStart = new Date(task.startDate);
-        const taskEnd = new Date(task.endDate);
-        const startOffset = Math.max(0, Math.ceil((taskStart.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)));
-        const duration = Math.ceil((taskEnd.getTime() - taskStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-
-        const leftPercent = (startOffset / totalDays) * 100;
-        const widthPercent = (duration / totalDays) * 100;
-
-        // Ensure the bar doesn't overflow
-        const maxWidth = 100 - leftPercent;
-        const finalWidth = Math.min(widthPercent, maxWidth);
-
-        return {
-            left: `${leftPercent}%`,
-            width: `${finalWidth}%`
-        };
-    };
-
-    const getDateRange = () => {
-        if (tasks.length === 0) {
-            const today = new Date();
-            const nextMonth = new Date(today);
-            nextMonth.setMonth(nextMonth.getMonth() + 1);
-            return { minDate: today, maxDate: nextMonth };
-        }
-
-        const dates = tasks.flatMap(t => [new Date(t.startDate), new Date(t.endDate)]);
-        return {
-            minDate: new Date(Math.min(...dates.map(d => d.getTime()))),
-            maxDate: new Date(Math.max(...dates.map(d => d.getTime())))
-        };
-    };
-
-    const generateTimelineData = (minDate: Date, maxDate: Date) => {
-        const months: { label: string; width: number; days: { date: number; width: number; isWeekend: boolean }[] }[] = [];
-        const current = new Date(minDate);
-        current.setDate(1);
-
-        const totalDaysRange = Math.ceil((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-
-        while (current <= maxDate) {
-            const monthStart = new Date(current);
-            const monthEnd = new Date(current.getFullYear(), current.getMonth() + 1, 0);
-
-            // Calculate effective start and end days for this month within the range
-            const effectiveStart = monthStart < minDate ? minDate : monthStart;
-            const effectiveEnd = monthEnd > maxDate ? maxDate : monthEnd;
-
-            const monthDaysCount = Math.ceil((effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-
-            const monthDays: { date: number; width: number; isWeekend: boolean }[] = [];
-            for (let d = new Date(effectiveStart); d <= effectiveEnd; d.setDate(d.getDate() + 1)) {
-                monthDays.push({
-                    date: d.getDate(),
-                    width: (1 / totalDaysRange) * 100,
-                    isWeekend: d.getDay() === 0 || d.getDay() === 6
-                });
-            }
-
-            months.push({
-                label: monthStart.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' }),
-                width: (monthDaysCount / totalDaysRange) * 100,
-                days: monthDays
-            });
-
-            current.setMonth(current.getMonth() + 1);
-        }
-
-        return months;
+        setDraggingTask({
+            id: task.id,
+            startX: e.clientX,
+            startEndDate: task.endDate,
+            barWidth: chartElement.getBoundingClientRect().width,
+            mode: 'resize'
+        });
     };
 
     if (!project) {
@@ -234,15 +279,6 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
             </div>
         );
     }
-
-    const { minDate, maxDate } = getDateRange();
-    const timelineData = generateTimelineData(minDate, maxDate);
-    const totalDaysInRange = Math.ceil((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    const today = new Date();
-    const isTodayInRange = today >= minDate && today <= maxDate;
-    const todayPosition = isTodayInRange
-        ? (Math.ceil((today.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)) / totalDaysInRange) * 100
-        : null;
 
     return (
         <div className="space-y-6">
@@ -361,8 +397,8 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
             {tasks.length > 0 ? (
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
                     <div className="min-w-[800px]">
-                        {/* Timeline Header */}
-                        <div className="relative border-b-2 border-slate-300 pb-2 mb-6">
+                        {/* Timeline Header - Sticky */}
+                        <div className="sticky top-0 z-30 bg-white border-b-2 border-slate-300 pb-2 mb-6 shadow-sm">
                             {/* Month Row */}
                             <div className="flex border-b border-slate-200">
                                 {timelineData.map((month, idx) => (
@@ -379,18 +415,17 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
                             <div className="flex bg-white">
                                 {timelineData.map((month) => (
                                     month.days.map((day, dIdx) => {
-                                        // Dynamic density: hide some numbers if too many days
                                         const showNumber = totalDaysInRange < 45 || day.date === 1 || day.date % 5 === 0 || day.date === month.days[month.days.length - 1].date;
                                         return (
                                             <div
                                                 key={`${month.label}-${dIdx}`}
-                                                className={`h-8 flex flex-col items-center justify-end border-r border-slate-100 last:border-r-0 relative ${day.isWeekend ? 'bg-slate-50/50' : ''}`}
+                                                className={`h-8 flex flex-col items-center justify-end border-r border-slate-100 last:border-r-0 relative ${day.isWeekend ? 'bg-rose-50' : ''}`}
                                                 style={{ width: `${day.width}%` }}
                                             >
                                                 {showNumber ? (
-                                                    <span className="text-[10px] text-slate-500 font-medium mb-1">{day.date}</span>
+                                                    <span className={`text-[10px] font-bold mb-1 ${day.isWeekend ? 'text-rose-600' : 'text-slate-500'}`}>{day.date}</span>
                                                 ) : (
-                                                    <div className="w-[1px] h-2 bg-slate-300 mb-1" />
+                                                    <div className={`w-[1px] h-2 mb-1 ${day.isWeekend ? 'bg-rose-300' : 'bg-slate-300'}`} />
                                                 )}
                                             </div>
                                         );
@@ -398,35 +433,36 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
                                 ))}
                             </div>
 
-                            {/* Today Indicator Line (Header) */}
                             {todayPosition !== null && (
                                 <div
-                                    className="absolute top-0 bottom-0 w-0.5 bg-rose-500 z-10"
+                                    className="absolute top-0 bottom-0 w-[2px] bg-rose-500 z-40"
                                     style={{ left: `${todayPosition}%` }}
                                     title="Oggi"
                                 >
-                                    <div className="absolute -top-1 -left-1 w-2.5 h-2.5 bg-rose-500 rounded-full" />
+                                    <div className="absolute -top-1 -left-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-white shadow-sm" />
                                 </div>
                             )}
                         </div>
 
                         {/* Chart Area with Grid */}
-                        <div className="relative">
+                        <div className="relative gantt-chart-area">
                             {/* Background Grid Lines */}
                             <div className="absolute inset-0 flex pointer-events-none">
-                                {Array.from({ length: totalDaysInRange }).map((_, i) => (
-                                    <div
-                                        key={i}
-                                        className="h-full border-r border-slate-100 flex-1 last:border-r-0"
-                                        style={{ width: `${100 / totalDaysInRange}%` }}
-                                    />
+                                {timelineData.map((month) => (
+                                    month.days.map((day, dIdx) => (
+                                        <div
+                                            key={`${month.label}-${dIdx}`}
+                                            className={`h-full border-r border-slate-100 flex-1 last:border-r-0 ${day.isWeekend ? 'bg-rose-50/30' : ''}`}
+                                            style={{ width: `${day.width}%` }}
+                                        />
+                                    ))
                                 ))}
                             </div>
 
                             {/* Today Indicator Line (Chart Area) */}
                             {todayPosition !== null && (
                                 <div
-                                    className="absolute top-0 bottom-0 w-0.5 bg-rose-500/30 z-0 pointer-events-none"
+                                    className="absolute top-0 bottom-0 w-[2px] bg-rose-500/20 z-0 pointer-events-none"
                                     style={{ left: `${todayPosition}%` }}
                                 />
                             )}
@@ -434,7 +470,7 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
                             {/* Tasks */}
                             <div className="space-y-4 relative z-10">
                                 {tasks.map(task => {
-                                    const position = calculateTaskPosition(task, minDate, maxDate);
+                                    const position = calculateTaskPosition(task);
                                     const colors = statusColors[task.status];
                                     const isEditing = editingTaskId === task.id;
 
@@ -562,41 +598,74 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
                                                         </div>
                                                     </div>
                                                     <div
-                                                        className="relative h-12 bg-slate-50 rounded-lg border border-slate-200 overflow-hidden cursor-ew-resize group/bar"
-                                                        onMouseDown={(e) => handleProgressMouseDown(e, task)}
+                                                        className="relative h-12 bg-slate-100/50 rounded-lg border border-slate-200 overflow-hidden cursor-ew-resize group/bar"
                                                     >
+                                                        {/* 1. Full Task Bar Background */}
                                                         <div
-                                                            className="absolute top-1 h-10 rounded-md shadow-sm flex items-center justify-between px-3 text-white text-xs font-bold transition-all select-none"
+                                                            className="absolute top-1 h-10 rounded-md shadow-sm transition-all"
                                                             style={{
                                                                 left: position.left,
                                                                 width: position.width,
                                                                 backgroundColor: task.color,
-                                                                opacity: 0.9
+                                                                opacity: 0.8
                                                             }}
-                                                        >
-                                                            <span className="truncate">{new Date(task.startDate).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}</span>
-                                                            <span className="truncate">{new Date(task.endDate).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}</span>
-                                                        </div>
-                                                        {/* Progress bar inside */}
+                                                        />
+
+                                                        {/* 2. Progress Overlay (Darker/Different shade) */}
                                                         <div
-                                                            className="absolute top-2 h-8 rounded bg-white/30 backdrop-blur-sm flex items-center justify-center text-[10px] font-black text-white pointer-events-none"
+                                                            className="absolute top-1 h-10 rounded-md bg-black/10 pointer-events-none transition-all"
                                                             style={{
                                                                 left: position.left,
                                                                 width: `calc(${position.width} * ${task.progress / 100})`,
-                                                                marginLeft: '4px',
-                                                                marginTop: '4px'
-                                                            }}
-                                                        >
-                                                            {task.progress > 15 && `${task.progress}%`}
-                                                        </div>
-
-                                                        {/* Drag Handle Indicator */}
-                                                        <div
-                                                            className="absolute top-1 h-10 w-1 bg-white/40 opacity-0 group-hover/bar:opacity-100 transition-opacity"
-                                                            style={{
-                                                                left: `calc(${position.left} + ${position.width} * ${task.progress / 100})`,
                                                             }}
                                                         />
+
+                                                        {/* 3. Content Layer (Labels & Dates) - Above everything */}
+                                                        <div
+                                                            className="absolute top-1 h-10 flex items-center justify-between px-2 text-white text-[10px] font-bold select-none pointer-events-none"
+                                                            style={{
+                                                                left: position.left,
+                                                                width: position.width,
+                                                                zIndex: 10
+                                                            }}
+                                                        >
+                                                            {parseFloat(position.width) > 8 ? (
+                                                                <>
+                                                                    <span className="bg-black/20 px-1 rounded backdrop-blur-[2px]">
+                                                                        {new Date(task.startDate).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })}
+                                                                    </span>
+                                                                    {parseFloat(position.width) > 15 && (
+                                                                        <span className="text-[9px] opacity-90">{task.progress}%</span>
+                                                                    )}
+                                                                    <span className="bg-black/20 px-1 rounded backdrop-blur-[2px]">
+                                                                        {new Date(task.endDate).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })}
+                                                                    </span>
+                                                                </>
+                                                            ) : (
+                                                                <div className="w-full text-center truncate">
+                                                                    {task.progress}%
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        {/* 4. Interactive Invisible Layer for Dragging */}
+                                                        <div
+                                                            className="absolute inset-y-0 cursor-ew-resize z-20"
+                                                            style={{ left: position.left, width: position.width }}
+                                                            onMouseDown={(e) => handleProgressMouseDown(e, task)}
+                                                        />
+
+                                                        {/* 5. Resize Handle (Right Edge) */}
+                                                        <div
+                                                            className="absolute top-1 bottom-1 w-2 hover:bg-white/30 cursor-col-resize z-30 rounded-r-md transition-colors"
+                                                            style={{
+                                                                left: `calc(${position.left} + ${position.width} - 6px)`,
+                                                                width: '10px'
+                                                            }}
+                                                            onMouseDown={(e) => handleResizeMouseDown(e, task)}
+                                                        >
+                                                            <div className="h-full w-[2px] bg-white/40 mx-auto rounded-full mt-0" />
+                                                        </div>
                                                     </div>
                                                 </div>
                                             )}
