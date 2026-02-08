@@ -25,7 +25,8 @@ export interface Expense {
   category: string; // Changed to string to support dynamic categories
   status: 'Pagato' | 'In Attesa';
   invoiceNumber?: string;
-  paymentType?: 'Acconto' | 'Saldo' | 'Unica Soluzione';
+  paymentType?: 'Acconto' | 'Saldo' | 'Unica Soluzione' | 'Bonifico' | 'Carta' | 'Contanti';
+  projectId?: string;
 }
 
 export interface Project {

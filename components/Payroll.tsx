@@ -23,9 +23,10 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, L
 
 interface PayrollProps {
     projects: Project[];
+    selectedProjectId?: string;
 }
 
-const Payroll: React.FC<PayrollProps> = ({ projects }) => {
+const Payroll: React.FC<PayrollProps> = ({ projects, selectedProjectId }) => {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [entries, setEntries] = useState<PayrollEntry[]>([]);
 
@@ -72,7 +73,35 @@ const Payroll: React.FC<PayrollProps> = ({ projects }) => {
         if (savedNotes) {
             try { setMonthlyNotes(JSON.parse(savedNotes)); } catch (e) { }
         }
+
+        const savedEmpNotes = localStorage.getItem('edilsmart_employee_notes');
+        if (savedEmpNotes) {
+            try { setEmployeeNotes(JSON.parse(savedEmpNotes)); } catch (e) { }
+        }
     }, []);
+
+    // Employee Notes State
+    const [employeeNotes, setEmployeeNotes] = useState<Record<string, string>>({}); // Key: empId
+    const [isEmpNoteModalOpen, setIsEmpNoteModalOpen] = useState<{ empId: string, name: string } | null>(null);
+    const [tempEmpNote, setTempEmpNote] = useState('');
+
+    const handleOpenEmpNote = (emp: Employee) => {
+        setIsEmpNoteModalOpen({ empId: emp.id, name: emp.name });
+        setTempEmpNote(employeeNotes[emp.id] || '');
+    };
+
+    const handleSaveEmpNote = () => {
+        if (!isEmpNoteModalOpen) return;
+        const updated = { ...employeeNotes, [isEmpNoteModalOpen.empId]: tempEmpNote };
+        // Remove empty notes
+        if (!tempEmpNote) delete updated[isEmpNoteModalOpen.empId];
+
+        setEmployeeNotes(updated);
+        localStorage.setItem('edilsmart_employee_notes', JSON.stringify(updated));
+        setIsEmpNoteModalOpen(null);
+        setToast({ message: 'Nota dipendente salvata', type: 'success' });
+        window.dispatchEvent(new CustomEvent('payroll-updated')); // Notify accounting
+    };
 
     // Save Data
     const saveEmployees = (updated: Employee[]) => {
@@ -83,6 +112,7 @@ const Payroll: React.FC<PayrollProps> = ({ projects }) => {
     const saveEntries = (updated: PayrollEntry[]) => {
         setEntries(updated);
         localStorage.setItem('edilsmart_payroll_entries', JSON.stringify(updated));
+        window.dispatchEvent(new CustomEvent('payroll-updated'));
     };
 
     // Month Helpers
@@ -102,7 +132,8 @@ const Payroll: React.FC<PayrollProps> = ({ projects }) => {
         // Format with thousand separator for the input
         const value = entry?.amount ? entry.amount.toLocaleString('it-IT') : '';
         setEntryValue(value);
-        setSelectedProject(entry?.projectId || '');
+        // Use entry projectId if it exists, otherwise fallback to the current sidebar project
+        setSelectedProject(entry?.projectId || selectedProjectId || '');
         setEntryNote(entry?.notes || '');
     };
 
@@ -293,8 +324,17 @@ const Payroll: React.FC<PayrollProps> = ({ projects }) => {
                     {/* Rows */}
                     {employees.map(emp => (
                         <div key={emp.id} className="grid hover:bg-slate-50 transition-colors" style={{ gridTemplateColumns: `150px repeat(${daysInMonth}, 40px) 100px` }}>
-                            <div className="p-3 border-b border-r border-slate-200 font-medium text-slate-800 sticky left-0 bg-white group flex justify-between items-center text-sm">
-                                <span className="truncate">{emp.name}</span>
+                            <div className="p-3 border-b border-r border-slate-200 font-medium text-slate-800 sticky left-0 bg-white group flex justify-between items-center text-sm z-10 w-[150px]">
+                                <div className="flex items-center gap-2 truncate flex-1 min-w-0">
+                                    <button
+                                        onClick={() => handleOpenEmpNote(emp)}
+                                        className={`transition-colors flex-shrink-0 ${employeeNotes[emp.id] ? 'text-amber-500 hover:text-amber-600' : 'text-slate-300 hover:text-amber-400 opacity-0 group-hover:opacity-100'}`}
+                                        title={employeeNotes[emp.id] ? "Modifica nota" : "Aggiungi nota"}
+                                    >
+                                        <StickyNote size={14} fill={employeeNotes[emp.id] ? "currentColor" : "none"} />
+                                    </button>
+                                    <span className="truncate" title={emp.name}>{emp.name}</span>
+                                </div>
                                 <button
                                     onClick={() => setConfirmDelete({ id: emp.id, type: 'employee' })}
                                     className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -500,6 +540,44 @@ const Payroll: React.FC<PayrollProps> = ({ projects }) => {
                                 Aggiungi Dipendente
                             </button>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Employee Note Modal */}
+            {isEmpNoteModalOpen && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+                        <div className="p-4 border-b bg-amber-50 flex justify-between items-center">
+                            <h3 className="font-bold text-amber-900 flex items-center gap-2">
+                                <StickyNote size={20} className="text-amber-600" />
+                                Nota per {isEmpNoteModalOpen.name}
+                            </h3>
+                            <button onClick={() => setIsEmpNoteModalOpen(null)}><X size={20} className="text-amber-400 hover:text-amber-600" /></button>
+                        </div>
+                        <div className="p-4">
+                            <textarea
+                                className="w-full h-32 p-3 bg-amber-50/50 rounded-lg border border-amber-200 focus:ring-2 focus:ring-amber-400 outline-none resize-none text-slate-700 placeholder-amber-300"
+                                placeholder="Scrivi una nota per questo dipendente..."
+                                value={tempEmpNote}
+                                onChange={(e) => setTempEmpNote(e.target.value)}
+                                autoFocus
+                            />
+                            <div className="flex justify-end gap-2 mt-4">
+                                <button
+                                    onClick={() => setIsEmpNoteModalOpen(null)}
+                                    className="px-4 py-2 text-slate-500 hover:bg-slate-100 rounded-lg font-medium transition-colors"
+                                >
+                                    Annulla
+                                </button>
+                                <button
+                                    onClick={handleSaveEmpNote}
+                                    className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold transition-colors shadow-sm"
+                                >
+                                    Salva Nota
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

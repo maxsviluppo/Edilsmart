@@ -25,9 +25,10 @@ import {
   Printer,
   Building2,
   Phone,
-  Mail
+  Mail,
+  User
 } from 'lucide-react';
-import { Expense, Supplier, Invoice, Project } from '../types';
+import { Expense, Supplier, Invoice, Project, PayrollEntry, Employee } from '../types';
 import { addInvoice, deleteInvoice as deleteInvoiceSvc, loadInvoices } from '../services/invoiceService';
 import ConfirmModal from './ConfirmModal';
 import Toast, { ToastType } from './Toast';
@@ -43,13 +44,17 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
   const project = projects?.find(p => p.id === selectedProjectId);
   const [transactions, setTransactions] = useState<Expense[]>([]);
 
-  const [activeTab, setActiveTab] = useState<'transactions' | 'invoices' | 'suppliers'>('transactions');
+  const [activeTab, setActiveTab] = useState<'transactions' | 'invoices' | 'suppliers' | 'categories'>('transactions');
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
 
   const [categories, setCategories] = useState<string[]>([
     'Materiali', 'Ricavi', 'Manodopera', 'Noleggi', 'Trasporti', 'Materiali Speciali', 'Altro'
   ]);
+
+  // Payroll Data
+  const [payrollEntries, setPayrollEntries] = useState<PayrollEntry[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
 
   // Load categories and other data from localStorage
   useEffect(() => {
@@ -77,6 +82,28 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
       try { setSuppliers(JSON.parse(savedSuppliers)); } catch (e) { }
     }
 
+    // Load Payroll Data
+    const savedEmployees = localStorage.getItem('edilsmart_employees');
+    if (savedEmployees) {
+      try { setEmployees(JSON.parse(savedEmployees)); } catch (e) { }
+    } else {
+      // Fallback to match Payroll initial state if nothing saved
+      setEmployees([
+        { id: '1', name: 'Enzo', role: 'Operaio', hourlyRate: 15 },
+        { id: '2', name: 'Lello', role: 'Operaio', hourlyRate: 14 },
+        { id: '3', name: 'Ciro', role: 'Operaio', hourlyRate: 16 },
+      ]);
+    }
+    const savedPayroll = localStorage.getItem('edilsmart_payroll_entries');
+    if (savedPayroll) {
+      try { setPayrollEntries(JSON.parse(savedPayroll)); } catch (e) { }
+    }
+
+    const savedEmpNotes = localStorage.getItem('edilsmart_employee_notes');
+    if (savedEmpNotes) {
+      try { setEmployeeNotes(JSON.parse(savedEmpNotes)); } catch (e) { }
+    }
+
     const savedInvoices = loadInvoices();
     if (savedInvoices) {
       // Show supplier invoices (ricevuta) plus legacy ones (missing type)
@@ -88,24 +115,52 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
     }
 
     // Listen for settings updates
-    const handleSettingsUpdate = () => {
+    const loadData = () => {
       const updated = localStorage.getItem('accounting_categories');
       if (updated) {
-        try {
-          setCategories(JSON.parse(updated));
-        } catch (e) { }
+        try { setCategories(JSON.parse(updated)); } catch (e) { }
+      }
+      const savedPayroll = localStorage.getItem('edilsmart_payroll_entries');
+      if (savedPayroll) {
+        try { setPayrollEntries(JSON.parse(savedPayroll)); } catch (e) { }
+      }
+      const savedEmployees = localStorage.getItem('edilsmart_employees');
+      if (savedEmployees) {
+        try { setEmployees(JSON.parse(savedEmployees)); } catch (e) { }
+      } else {
+        setEmployees([
+          { id: '1', name: 'Enzo', role: 'Operaio', hourlyRate: 15 },
+          { id: '2', name: 'Lello', role: 'Operaio', hourlyRate: 14 },
+          { id: '3', name: 'Ciro', role: 'Operaio', hourlyRate: 16 },
+        ]);
+      }
+      const savedEmpNotes = localStorage.getItem('edilsmart_employee_notes');
+      if (savedEmpNotes) {
+        try { setEmployeeNotes(JSON.parse(savedEmpNotes)); } catch (e) { }
       }
     };
 
-    window.addEventListener('company-settings-updated', handleSettingsUpdate);
-    return () => window.removeEventListener('company-settings-updated', handleSettingsUpdate);
-  }, [project?.id]);
+    loadData();
+
+    window.addEventListener('company-settings-updated', loadData);
+    window.addEventListener('payroll-updated', loadData);
+    window.addEventListener('storage', loadData);
+    return () => {
+      window.removeEventListener('company-settings-updated', loadData);
+      window.removeEventListener('payroll-updated', loadData);
+      window.removeEventListener('storage', loadData);
+    };
+  }, [project?.id, activeTab]);
 
   // Sync transactions back to project if it changes
   useEffect(() => {
     if (project && onUpdateProject) {
-      const totalExpenses = Math.abs(transactions.filter(t => t.amount < 0).reduce((acc, t) => acc + t.amount, 0));
-      const totalIncome = transactions.filter(t => t.amount > 0).reduce((acc, t) => acc + t.amount, 0);
+      const totalExpenses = Math.abs(transactions.filter(t => t.amount < 0 && t.category !== 'Ricavi').reduce((acc, t) => acc + t.amount, 0));
+      const totalIncome = transactions.reduce((acc, t) => {
+        if (t.category === 'Ricavi') return acc + Math.abs(t.amount);
+        if (t.amount > 0) return acc + t.amount;
+        return acc;
+      }, 0);
 
       // Only update if there is a real difference to avoid infinite loops
       if (JSON.stringify(project.expenses) !== JSON.stringify(transactions) || project.totalExpenses !== totalExpenses) {
@@ -126,6 +181,7 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
 
   // Modal States
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -143,11 +199,17 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
     status: 'In Attesa'
   });
 
+  const [editingCategory, setEditingCategory] = useState<{ old: string; new: string } | null>(null);
+  const [isEditCategoryModalOpen, setIsEditCategoryModalOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
 
   // Supplier & Invoice States
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
   const [newSupplier, setNewSupplier] = useState<Partial<Supplier>>({ name: '', vatNumber: '', email: '', phone: '', category: '' });
+
+  // Employee Notes from Payroll
+  const [employeeNotes, setEmployeeNotes] = useState<Record<string, string>>({});
+  const [activeNote, setActiveNote] = useState<{ name: string, note: string } | null>(null);
 
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [newInvoice, setNewInvoice] = useState<any>({
@@ -185,6 +247,32 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
       localStorage.setItem('accounting_categories', JSON.stringify(updatedCategories));
       setNewCategoryName('');
       setIsCategoryModalOpen(false);
+      setToast({ message: 'Categoria aggiunta con successo', type: 'success' });
+    }
+  };
+
+  const handleDeleteCategory = (cat: string) => {
+    if (confirm(`Sei sicuro di voler eliminare la categoria "${cat}"?`)) {
+      const updated = categories.filter(c => c !== cat);
+      setCategories(updated);
+      localStorage.setItem('accounting_categories', JSON.stringify(updated));
+      setToast({ message: 'Categoria eliminata con successo', type: 'success' });
+    }
+  };
+
+  const handleEditCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingCategory && editingCategory.new && !categories.includes(editingCategory.new)) {
+      const updated = categories.map(c => c === editingCategory.old ? editingCategory.new : c);
+      setCategories(updated);
+      localStorage.setItem('accounting_categories', JSON.stringify(updated));
+
+      // Update categories in transactions too?
+      setTransactions(prev => prev.map(t => t.category === editingCategory.old ? { ...t, category: editingCategory.new } : t));
+
+      setIsEditCategoryModalOpen(false);
+      setEditingCategory(null);
+      setToast({ message: 'Categoria modificata con successo', type: 'success' });
     }
   };
 
@@ -196,20 +284,31 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
   const handleUpdateTransaction = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingTransaction) {
-      setTransactions(prev => prev.map(t => t.id === editingTransaction.id ? editingTransaction : t));
+      // Force Ricavi to be positive
+      const finalAmount = editingTransaction.category === 'Ricavi'
+        ? Math.abs(editingTransaction.amount)
+        : (editingTransaction.amount > 0 ? -editingTransaction.amount : editingTransaction.amount);
+
+      const updatedTransaction = { ...editingTransaction, amount: finalAmount };
+      setTransactions(prev => prev.map(t => t.id === editingTransaction.id ? updatedTransaction : t));
       setIsEditModalOpen(false);
       setEditingTransaction(null);
+      setToast({ message: 'Registrazione aggiornata con successo', type: 'success' });
     }
   };
 
   const handleCreateTransaction = (e: React.FormEvent) => {
     e.preventDefault();
     if (newTransaction.description && newTransaction.amount !== undefined) {
+      const finalAmount = (newTransaction.category === 'Ricavi')
+        ? Math.abs(newTransaction.amount)
+        : (newTransaction.amount > 0 ? -newTransaction.amount : newTransaction.amount);
+
       const transaction: Expense = {
         id: Math.random().toString(36).substr(2, 9),
         date: newTransaction.date || new Date().toISOString().split('T')[0],
         description: newTransaction.description,
-        amount: newTransaction.amount,
+        amount: finalAmount,
         category: newTransaction.category || 'Altro',
         status: newTransaction.status as 'Pagato' | 'In Attesa' || 'In Attesa',
         invoiceNumber: newTransaction.invoiceNumber,
@@ -311,17 +410,37 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
     setStartDate('');
     setEndDate('');
     setSearchTerm('');
+    setFilterCategory('');
   };
 
+  const allTransactions = useMemo(() => {
+    const virtualPayrollExpenses: Expense[] = payrollEntries
+      .filter(pe => !project || pe.projectId === project.id)
+      .map(pe => {
+        const emp = employees.find(e => e.id === pe.employeeId);
+        return {
+          id: `payroll_${pe.id}`,
+          date: pe.date,
+          description: `Dipendente: ${emp?.name || 'Sconosciuto'}`,
+          amount: -(pe.amount || 0),
+          category: 'Manodopera',
+          status: 'Pagato' as const,
+        };
+      });
+
+    return [...transactions, ...virtualPayrollExpenses];
+  }, [transactions, payrollEntries, employees, project?.id]);
+
   const filteredTransactions = useMemo(() => {
-    return transactions.filter(t => {
+    return allTransactions.filter(t => {
       const matchesSearch = t.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
         t.category.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStart = !startDate || t.date >= startDate;
       const matchesEnd = !endDate || t.date <= endDate;
-      return matchesSearch && matchesStart && matchesEnd;
+      const matchesCategory = !filterCategory || t.category === filterCategory;
+      return matchesSearch && matchesStart && matchesEnd && matchesCategory;
     }).sort((a, b) => b.date.localeCompare(a.date));
-  }, [transactions, startDate, endDate, searchTerm]);
+  }, [allTransactions, startDate, endDate, searchTerm, filterCategory]);
 
   const handleExportCSV = () => {
     const headers = ["Data", "Descrizione", "Categoria", "Stato", "Importo"];
@@ -344,8 +463,17 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
     document.body.removeChild(link);
   };
 
-  const totalIncome = filteredTransactions.filter(t => t.amount > 0).reduce((acc, t) => acc + t.amount, 0);
-  const totalExpenses = Math.abs(filteredTransactions.filter(t => t.amount < 0).reduce((acc, t) => acc + t.amount, 0));
+  const totalIncome = filteredTransactions.reduce((acc, t) => {
+    if (t.category === 'Ricavi') return acc + Math.abs(t.amount);
+    if (t.amount > 0) return acc + t.amount;
+    return acc;
+  }, 0);
+
+  const totalExpenses = Math.abs(filteredTransactions.reduce((acc, t) => {
+    if (t.category !== 'Ricavi' && t.amount < 0) return acc + t.amount;
+    return acc;
+  }, 0));
+
   const netBalance = totalIncome - totalExpenses;
 
   return (
@@ -408,6 +536,14 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
         >
           <Users size={16} className="mr-2" />
           Fornitori
+        </button>
+        <button
+          onClick={() => setActiveTab('categories')}
+          className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'categories' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+        >
+          <Tag size={16} className="mr-2" />
+          Categorie
         </button>
       </div>
 
@@ -509,6 +645,21 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
+                <div className="space-y-2 min-w-[160px]">
+                  <label className="text-xs font-bold text-slate-500 uppercase flex items-center">
+                    <Tag size={12} className="mr-1" /> Filtra Categoria
+                  </label>
+                  <select
+                    className="w-full p-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                  >
+                    <option value="">Tutte le categorie</option>
+                    {categories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
                 <button
                   onClick={clearFilters}
                   className="px-4 py-2 text-sm text-slate-500 hover:text-rose-600 flex items-center font-medium transition-colors"
@@ -547,8 +698,31 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
                           </td>
                           <td className={`px-6 py-4 font-medium ${isEditing ? 'text-blue-900' : 'text-slate-800'}`}>
                             <div>{t.description}</div>
-                            {(t.invoiceNumber || t.paymentType) && (
-                              <div className="text-xs text-slate-500 mt-1 flex gap-2">
+                            {(t.invoiceNumber || t.paymentType || t.id.startsWith('payroll_')) && (
+                              <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
+                                {t.id.startsWith('payroll_') && (() => {
+                                  const parts = t.description.split(': '); // Check for "Dipendente: [Name]"
+                                  const name = parts.length > 1 ? parts[1] : null;
+                                  const emp = name ? employees.find(e => e.name === name) : null;
+                                  const hasNote = emp && employeeNotes[emp.id];
+
+                                  return (
+                                    <span className="flex items-center gap-1 bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-medium">
+                                      <User size={12} />
+                                      {name || 'Personale'}
+                                      {hasNote && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveNote({ name: name!, note: employeeNotes[emp!.id] });
+                                          }}
+                                          className="w-2 h-2 rounded-full bg-red-500 animate-pulse hover:scale-150 transition-transform ml-1"
+                                          title="Leggi nota dipendente"
+                                        />
+                                      )}
+                                    </span>
+                                  );
+                                })()}
                                 {t.invoiceNumber && <span>Fatt. {t.invoiceNumber}</span>}
                                 {t.invoiceNumber && t.paymentType && <span>•</span>}
                                 {t.paymentType && <span className="uppercase">{t.paymentType}</span>}
@@ -571,29 +745,38 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
                               {t.status}
                             </span>
                           </td>
-                          <td className={`px-6 py-4 text-right font-bold ${t.amount > 0 ? 'text-emerald-600' : 'text-slate-900'} ${isEditing ? 'text-blue-900' : ''}`}>
-                            {t.amount > 0 ? '+' : ''}{t.amount.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })}
+                          <td className={`px-6 py-4 text-right font-bold ${(t.amount > 0 || t.category === 'Ricavi') ? 'text-emerald-600' : 'text-slate-900'} ${isEditing ? 'text-blue-900' : ''}`}>
+                            {(t.amount > 0 || t.category === 'Ricavi') ? '+' : ''}
+                            {(t.category === 'Ricavi' ? Math.abs(t.amount) : t.amount).toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })}
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex gap-2">
-                              <button
-                                onClick={() => handleOpenEdit(t)}
-                                disabled={isEditing}
-                                className={`p-2 rounded-lg transition-all ${isEditing
-                                  ? 'text-blue-600 bg-blue-100 cursor-default'
-                                  : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
-                                  }`}
-                                title="Modifica Transazione"
-                              >
-                                <Pencil size={16} />
-                              </button>
-                              <button
-                                onClick={() => setDeletingTransactionId(t.id)}
-                                className="p-2 rounded-lg transition-all text-slate-400 hover:text-rose-600 hover:bg-rose-50"
-                                title="Elimina Transazione"
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                              {!t.id.startsWith('payroll_') ? (
+                                <>
+                                  <button
+                                    onClick={() => handleOpenEdit(t)}
+                                    disabled={isEditing}
+                                    className={`p-2 rounded-lg transition-all ${isEditing
+                                      ? 'text-blue-600 bg-blue-100 cursor-default'
+                                      : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
+                                      }`}
+                                    title="Modifica Transazione"
+                                  >
+                                    <Pencil size={16} />
+                                  </button>
+                                  <button
+                                    onClick={() => setDeletingTransactionId(t.id)}
+                                    className="p-2 rounded-lg transition-all text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                                    title="Elimina Transazione"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded italic">
+                                  SOLO LETTURA
+                                </span>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1138,6 +1321,73 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
           </div>
         </div>
       )}
+
+      {activeTab === 'categories' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="font-bold text-slate-800 text-lg">Gestione Categorie</h3>
+            <button
+              onClick={() => setIsCategoryModalOpen(true)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center shadow-sm transition-colors font-medium"
+            >
+              <Plus size={18} className="mr-2" />
+              Nuova Categoria
+            </button>
+          </div>
+
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-slate-600 font-semibold border-b">
+                <tr>
+                  <th className="px-6 py-4">Nome Categoria</th>
+                  <th className="px-6 py-4">Utilizzo</th>
+                  <th className="px-6 py-4 text-center">Azioni</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {categories.map((cat) => (
+                  <tr key={cat} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4 font-medium text-slate-900">
+                      <div className="flex items-center gap-2">
+                        <Tag size={16} className="text-slate-400" />
+                        <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase border ${getCategoryStyle(cat)}`}>
+                          {cat}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-slate-500">
+                      {transactions.filter(t => t.category === cat).length} transazioni
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex justify-center gap-2">
+                        <button
+                          onClick={() => {
+                            setEditingCategory({ old: cat, new: cat });
+                            setIsEditCategoryModalOpen(true);
+                          }}
+                          className="p-2 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                          title="Modifica"
+                        >
+                          <Pencil size={16} />
+                        </button>
+                        {!['Materiali', 'Ricavi', 'Manodopera', 'Altro'].includes(cat) && (
+                          <button
+                            onClick={() => handleDeleteCategory(cat)}
+                            className="p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                            title="Elimina"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
       {/* Supplier Modal */}
       {isSupplierModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
@@ -1260,6 +1510,90 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
 
               <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl mt-2">Registra Fattura</button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Category Modal */}
+      {isEditCategoryModalOpen && editingCategory && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-6 border-b flex justify-between items-center bg-slate-50">
+              <h3 className="text-lg font-bold text-slate-800 flex items-center">
+                <Pencil className="mr-2 text-blue-600" size={20} />
+                Modifica Categoria
+              </h3>
+              <button
+                onClick={() => {
+                  setIsEditCategoryModalOpen(false);
+                  setEditingCategory(null);
+                }}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleEditCategory} className="p-6 space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Nome Categoria</label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                  value={editingCategory.new}
+                  onChange={e => setEditingCategory({ ...editingCategory, new: e.target.value })}
+                />
+              </div>
+              <div className="bg-blue-50 p-4 rounded-xl flex items-start space-x-3 border border-blue-100">
+                <AlertCircle className="text-blue-600 mt-0.5" size={18} />
+                <p className="text-xs text-blue-800 leading-relaxed">
+                  Modificando il nome della categoria, tutte le transazioni esistenti verranno aggiornate automaticamente.
+                </p>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditCategoryModalOpen(false);
+                    setEditingCategory(null);
+                  }}
+                  className="flex-1 px-4 py-3 border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors"
+                >
+                  Annulla
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all active:scale-95"
+                >
+                  Aggiorna
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Note Popup Modal */}
+      {activeNote && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
+          onClick={() => setActiveNote(null)}>
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200"
+            onClick={e => e.stopPropagation()}>
+            <div className="p-4 bg-amber-50 border-b border-amber-100 flex justify-between items-center">
+              <h3 className="font-bold text-amber-900 flex items-center gap-2">
+                <User size={18} className="text-amber-600" />
+                Nota: {activeNote.name}
+              </h3>
+              <button onClick={() => setActiveNote(null)} className="text-amber-400 hover:text-amber-600">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-slate-700 whitespace-pre-wrap italic bg-amber-50/50 p-4 rounded-lg border border-amber-100 text-sm leading-relaxed">
+                "{activeNote.note}"
+              </p>
+            </div>
           </div>
         </div>
       )}

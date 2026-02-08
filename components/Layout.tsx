@@ -16,7 +16,8 @@ import {
   Folder,
   GanttChart,
   FileText,
-  FileCheck
+  FileCheck,
+  Package
 } from 'lucide-react';
 import { Project } from '../types';
 
@@ -57,6 +58,7 @@ const Layout: React.FC<LayoutProps> = ({
     { id: 'accounting', label: 'Contabilità', icon: Receipt },
     { id: 'statistics', label: 'Statistiche', icon: PieChart },
     { id: 'payroll', label: 'Paghe e Stipendi', icon: Wallet },
+    { id: 'materials', label: 'Materiali', icon: Package },
     { id: 'pricelists', label: 'Prezziari', icon: Database },
   ];
 

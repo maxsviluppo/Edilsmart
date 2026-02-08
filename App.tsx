@@ -13,6 +13,7 @@ import Statistics from './components/Statistics';
 import InvoicesQuotes from './components/InvoicesQuotes';
 import Documents from './components/Documents';
 import Payroll from './components/Payroll';
+import Materials from './components/Materials';
 import { HardHat, Clock, Calendar, DollarSign, User } from 'lucide-react';
 import { Project } from './types';
 import { loadInvoices, saveInvoices, loadQuotes, saveQuotes } from './services/invoiceService';
@@ -125,7 +126,7 @@ const App: React.FC = () => {
       case 'statistics':
         return <Statistics projects={visibleProjects} />;
       case 'payroll':
-        return <Payroll projects={visibleProjects} />;
+        return <Payroll projects={visibleProjects} selectedProjectId={selectedProjectId} />;
       case 'projects':
         return (
           <div className="space-y-6">
@@ -149,6 +150,7 @@ const App: React.FC = () => {
                   project={selectedProject}
                   onNavigate={setActiveTab}
                   onOpenSettings={() => setShowProjectSettings(true)}
+                  onUpdateProject={handleUpdateProject}
                 />
               </div>
             ) : (
@@ -254,6 +256,8 @@ const App: React.FC = () => {
         );
       case 'settings':
         return <Settings />;
+      case 'materials':
+        return <Materials projects={projects} selectedProjectId={selectedProjectId} onUpdateProject={handleUpdateProject} />;
       default:
         return <Dashboard projects={projects} />;
     }
