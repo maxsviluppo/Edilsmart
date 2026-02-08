@@ -428,6 +428,36 @@ const Settings: React.FC = () => {
                     </div>
                 </div>
             )}
+
+            {/* Factory Reset Section */}
+            <div className="border-t border-slate-200 pt-8 mt-12 bg-rose-50 rounded-xl p-8 border-rose-100">
+                <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div>
+                        <h3 className="text-xl font-bold text-rose-700 flex items-center gap-2">
+                            <AlertCircle size={24} />
+                            Zona Pericolo: Reset Completo
+                        </h3>
+                        <p className="text-rose-600 mt-2 max-w-xl">
+                            Questa operazione cancellerà <strong>TUTTI i dati</strong> salvati sul dispositivo: progetti, impostazioni, loghi, categorie, contabilità, paghe, ecc. <br />
+                            L'app verrà ripristinata allo stato iniziale come appena installata.
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => {
+                            if (confirm("SEI SICURO? Questa operazione cancellerà PER SEMPRE tutti i dati dell'applicazione. Non potrai annullare questa azione!")) {
+                                if (confirm("CONFERMA FINALE: Sei davvero sicuro di voler azzerare TUTTO?")) {
+                                    localStorage.clear();
+                                    alert("Dati cancellati correttamente. L'applicazione verrà ricaricata.");
+                                    window.location.reload();
+                                }
+                            }
+                        }}
+                        className="bg-rose-600 hover:bg-rose-700 text-white px-6 py-4 rounded-lg font-bold shadow-lg shadow-rose-900/20 active:scale-95 transition-all w-full md:w-auto text-center"
+                    >
+                        AZZERA TUTTI I DATI
+                    </button>
+                </div>
+            </div>
         </div>
     );
 };

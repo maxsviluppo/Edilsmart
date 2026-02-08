@@ -126,8 +126,8 @@ export const downloadAndImportFromURL = async (
             );
         };
 
-        const codeIndex = findColumnIndex(['codice', 'code', 'cod', 'id']);
-        const descIndex = findColumnIndex(['descrizione', 'description', 'desc', 'voce']);
+        const codeIndex = findColumnIndex(['codice', 'code', 'cod', 'id', 'tariffa', 'articolo', 'art.']);
+        const descIndex = findColumnIndex(['descrizione', 'description', 'desc', 'voce', 'designazione', 'libretto', 'lavori']);
         const unitIndex = findColumnIndex(['unità', 'unita', 'unit', 'um', 'u.m.', 'misura']);
         const priceIndex = findColumnIndex(['prezzo', 'price', 'importo', 'costo', 'euro', '€']);
         const categoryIndex = findColumnIndex(['categoria', 'category', 'cat', 'tipo', 'capitolo']);
