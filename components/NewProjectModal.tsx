@@ -35,7 +35,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
             name: formData.name,
             client: formData.client,
             location: formData.location,
-            budget: parseFloat(formData.budget) || 0,
+            budget: parseFloat(formData.budget.replace(/\./g, '')) || 0,
             startDate: formData.startDate,
             endDate: formData.endDate,
             iva: formData.ivaSelection === 'custom' ? (parseFloat(formData.ivaCustom) || 0) : parseInt(formData.ivaSelection),
@@ -109,11 +109,17 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
                             <label className="block text-sm font-semibold text-slate-700 mb-1">Totale Preventivo (€)</label>
                             <div className="relative">
                                 <input
-                                    type="number"
+                                    type="text"
                                     className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
-                                    placeholder="0.00"
+                                    placeholder="0"
                                     value={formData.budget}
-                                    onChange={e => setFormData({ ...formData, budget: e.target.value })}
+                                    onChange={e => {
+                                        // Rimuovi tutto ciò che non è numero
+                                        const value = e.target.value.replace(/\D/g, '');
+                                        // Formatta con i punti per le migliaia
+                                        const formatted = value.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+                                        setFormData({ ...formData, budget: formatted });
+                                    }}
                                 />
                                 <Euro size={18} className="absolute left-3 top-2.5 text-slate-400" />
                             </div>
@@ -151,12 +157,13 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
                                 readOnly
                                 className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 bg-slate-50 text-slate-700 font-bold outline-none"
                                 value={(() => {
-                                    const budget = parseFloat(formData.budget) || 0;
+                                    const budget = parseFloat(formData.budget.replace(/\./g, '')) || 0;
                                     const ivaRate = formData.ivaSelection === 'custom'
                                         ? (parseFloat(formData.ivaCustom) || 0)
                                         : parseInt(formData.ivaSelection);
                                     const total = budget + (budget * ivaRate / 100);
-                                    return total > 0 ? total.toFixed(2) : '0.00';
+                                    // Formatta anche il totale con i punti
+                                    return total > 0 ? total.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ".") : '0,00';
                                 })()}
                             />
                             <Euro size={18} className="absolute left-3 top-2.5 text-slate-400" />

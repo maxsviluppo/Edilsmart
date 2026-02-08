@@ -30,6 +30,8 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
         color: '#3b82f6'
     });
 
+    const [draggingTask, setDraggingTask] = useState<{ id: string; startX: number; startProgress: number; barWidth: number } | null>(null);
+
     const statusColors = {
         planned: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-300' },
         'in-progress': { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-300' },
@@ -104,6 +106,51 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
         setDeletingTaskId(null);
     };
 
+    // Drag to update progress logic
+    useEffect(() => {
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!draggingTask) return;
+
+            const deltaX = e.clientX - draggingTask.startX;
+            const percentageChange = (deltaX / draggingTask.barWidth) * 100;
+            const newProgress = Math.max(0, Math.min(100, Math.round(draggingTask.startProgress + percentageChange)));
+
+            updateTask(draggingTask.id, { progress: newProgress });
+        };
+
+        const handleMouseUp = () => {
+            if (draggingTask) {
+                setDraggingTask(null);
+                document.body.style.cursor = 'default';
+                document.body.style.userSelect = 'auto';
+            }
+        };
+
+        if (draggingTask) {
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+            document.body.style.cursor = 'ew-resize';
+            document.body.style.userSelect = 'none';
+        }
+
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [draggingTask]);
+
+    const handleProgressMouseDown = (e: React.MouseEvent, task: Task) => {
+        const barElement = e.currentTarget as HTMLElement;
+        const rect = barElement.getBoundingClientRect();
+
+        setDraggingTask({
+            id: task.id,
+            startX: e.clientX,
+            startProgress: task.progress,
+            barWidth: rect.width
+        });
+    };
+
 
     const calculateTaskPosition = (task: Task, minDate: Date, maxDate: Date) => {
         const totalDays = Math.ceil((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
@@ -140,22 +187,36 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
         };
     };
 
-    const generateMonthHeaders = (minDate: Date, maxDate: Date) => {
-        const months: { label: string; width: number }[] = [];
+    const generateTimelineData = (minDate: Date, maxDate: Date) => {
+        const months: { label: string; width: number; days: { date: number; width: number; isWeekend: boolean }[] }[] = [];
         const current = new Date(minDate);
         current.setDate(1);
+
+        const totalDaysRange = Math.ceil((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
         while (current <= maxDate) {
             const monthStart = new Date(current);
             const monthEnd = new Date(current.getFullYear(), current.getMonth() + 1, 0);
+
+            // Calculate effective start and end days for this month within the range
+            const effectiveStart = monthStart < minDate ? minDate : monthStart;
             const effectiveEnd = monthEnd > maxDate ? maxDate : monthEnd;
 
-            const totalDays = Math.ceil((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24));
-            const monthDays = Math.ceil((effectiveEnd.getTime() - monthStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+            const monthDaysCount = Math.ceil((effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+            const monthDays: { date: number; width: number; isWeekend: boolean }[] = [];
+            for (let d = new Date(effectiveStart); d <= effectiveEnd; d.setDate(d.getDate() + 1)) {
+                monthDays.push({
+                    date: d.getDate(),
+                    width: (1 / totalDaysRange) * 100,
+                    isWeekend: d.getDay() === 0 || d.getDay() === 6
+                });
+            }
 
             months.push({
-                label: monthStart.toLocaleDateString('it-IT', { month: 'short', year: 'numeric' }),
-                width: (monthDays / totalDays) * 100
+                label: monthStart.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' }),
+                width: (monthDaysCount / totalDaysRange) * 100,
+                days: monthDays
             });
 
             current.setMonth(current.getMonth() + 1);
@@ -175,7 +236,13 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
     }
 
     const { minDate, maxDate } = getDateRange();
-    const monthHeaders = generateMonthHeaders(minDate, maxDate);
+    const timelineData = generateTimelineData(minDate, maxDate);
+    const totalDaysInRange = Math.ceil((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const today = new Date();
+    const isTodayInRange = today >= minDate && today <= maxDate;
+    const todayPosition = isTodayInRange
+        ? (Math.ceil((today.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)) / totalDaysInRange) * 100
+        : null;
 
     return (
         <div className="space-y-6">
@@ -294,175 +361,249 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
             {tasks.length > 0 ? (
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
                     <div className="min-w-[800px]">
-                        {/* Month Headers */}
-                        <div className="flex border-b-2 border-slate-300 mb-4">
-                            {monthHeaders.map((month, idx) => (
+                        {/* Timeline Header */}
+                        <div className="relative border-b-2 border-slate-300 pb-2 mb-6">
+                            {/* Month Row */}
+                            <div className="flex border-b border-slate-200">
+                                {timelineData.map((month, idx) => (
+                                    <div
+                                        key={idx}
+                                        className="text-center font-bold text-slate-800 py-3 border-r border-slate-200 last:border-r-0 bg-slate-50/50 capitalize text-sm"
+                                        style={{ width: `${month.width}%` }}
+                                    >
+                                        {month.label}
+                                    </div>
+                                ))}
+                            </div>
+                            {/* Days Row */}
+                            <div className="flex bg-white">
+                                {timelineData.map((month) => (
+                                    month.days.map((day, dIdx) => {
+                                        // Dynamic density: hide some numbers if too many days
+                                        const showNumber = totalDaysInRange < 45 || day.date === 1 || day.date % 5 === 0 || day.date === month.days[month.days.length - 1].date;
+                                        return (
+                                            <div
+                                                key={`${month.label}-${dIdx}`}
+                                                className={`h-8 flex flex-col items-center justify-end border-r border-slate-100 last:border-r-0 relative ${day.isWeekend ? 'bg-slate-50/50' : ''}`}
+                                                style={{ width: `${day.width}%` }}
+                                            >
+                                                {showNumber ? (
+                                                    <span className="text-[10px] text-slate-500 font-medium mb-1">{day.date}</span>
+                                                ) : (
+                                                    <div className="w-[1px] h-2 bg-slate-300 mb-1" />
+                                                )}
+                                            </div>
+                                        );
+                                    })
+                                ))}
+                            </div>
+
+                            {/* Today Indicator Line (Header) */}
+                            {todayPosition !== null && (
                                 <div
-                                    key={idx}
-                                    className="text-center font-bold text-slate-700 py-2 border-r border-slate-200 last:border-r-0"
-                                    style={{ width: `${month.width}%` }}
+                                    className="absolute top-0 bottom-0 w-0.5 bg-rose-500 z-10"
+                                    style={{ left: `${todayPosition}%` }}
+                                    title="Oggi"
                                 >
-                                    {month.label}
+                                    <div className="absolute -top-1 -left-1 w-2.5 h-2.5 bg-rose-500 rounded-full" />
                                 </div>
-                            ))}
+                            )}
                         </div>
 
-                        {/* Tasks */}
-                        <div className="space-y-3">
-                            {tasks.map(task => {
-                                const position = calculateTaskPosition(task, minDate, maxDate);
-                                const colors = statusColors[task.status];
-                                const isEditing = editingTaskId === task.id;
+                        {/* Chart Area with Grid */}
+                        <div className="relative">
+                            {/* Background Grid Lines */}
+                            <div className="absolute inset-0 flex pointer-events-none">
+                                {Array.from({ length: totalDaysInRange }).map((_, i) => (
+                                    <div
+                                        key={i}
+                                        className="h-full border-r border-slate-100 flex-1 last:border-r-0"
+                                        style={{ width: `${100 / totalDaysInRange}%` }}
+                                    />
+                                ))}
+                            </div>
 
-                                return (
-                                    <div key={task.id} className="relative">
-                                        {isEditing ? (
-                                            // Edit Mode
-                                            <div className="bg-blue-50 p-4 rounded-lg border-2 border-blue-300">
-                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
-                                                    <div className="lg:col-span-2">
-                                                        <label className="block text-xs font-semibold text-slate-700 mb-1">Nome Attività</label>
-                                                        <input
-                                                            type="text"
-                                                            className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none capitalize text-sm"
-                                                            value={task.name}
-                                                            onChange={e => updateTask(task.id, { name: e.target.value })}
-                                                        />
+                            {/* Today Indicator Line (Chart Area) */}
+                            {todayPosition !== null && (
+                                <div
+                                    className="absolute top-0 bottom-0 w-0.5 bg-rose-500/30 z-0 pointer-events-none"
+                                    style={{ left: `${todayPosition}%` }}
+                                />
+                            )}
+
+                            {/* Tasks */}
+                            <div className="space-y-4 relative z-10">
+                                {tasks.map(task => {
+                                    const position = calculateTaskPosition(task, minDate, maxDate);
+                                    const colors = statusColors[task.status];
+                                    const isEditing = editingTaskId === task.id;
+
+                                    return (
+                                        <div key={task.id} className="relative">
+                                            {isEditing ? (
+                                                // Edit Mode
+                                                <div className="bg-blue-50 p-4 rounded-lg border-2 border-blue-300">
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                                                        <div className="lg:col-span-2">
+                                                            <label className="block text-xs font-semibold text-slate-700 mb-1">Nome Attività</label>
+                                                            <input
+                                                                type="text"
+                                                                className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none capitalize text-sm"
+                                                                value={task.name}
+                                                                onChange={e => updateTask(task.id, { name: e.target.value })}
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-semibold text-slate-700 mb-1">Data Inizio</label>
+                                                            <input
+                                                                type="date"
+                                                                className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                                                                value={task.startDate}
+                                                                onChange={e => updateTask(task.id, { startDate: e.target.value })}
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-semibold text-slate-700 mb-1">Data Fine</label>
+                                                            <input
+                                                                type="date"
+                                                                className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                                                                value={task.endDate}
+                                                                onChange={e => updateTask(task.id, { endDate: e.target.value })}
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-semibold text-slate-700 mb-1">Stato</label>
+                                                            <select
+                                                                className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                                                                value={task.status}
+                                                                onChange={e => updateTask(task.id, { status: e.target.value as Task['status'] })}
+                                                            >
+                                                                {Object.entries(statusLabels).map(([value, label]) => (
+                                                                    <option key={value} value={value}>{label}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-semibold text-slate-700 mb-1">Colore</label>
+                                                            <select
+                                                                className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                                                                value={task.color}
+                                                                onChange={e => updateTask(task.id, { color: e.target.value })}
+                                                            >
+                                                                {colorOptions.map(opt => (
+                                                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-semibold text-slate-700 mb-1">Avanzamento (%)</label>
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                max="100"
+                                                                className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                                                                value={task.progress}
+                                                                onChange={e => updateTask(task.id, { progress: parseInt(e.target.value) || 0 })}
+                                                            />
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <label className="block text-xs font-semibold text-slate-700 mb-1">Data Inizio</label>
-                                                        <input
-                                                            type="date"
-                                                            className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                                                            value={task.startDate}
-                                                            onChange={e => updateTask(task.id, { startDate: e.target.value })}
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-xs font-semibold text-slate-700 mb-1">Data Fine</label>
-                                                        <input
-                                                            type="date"
-                                                            className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                                                            value={task.endDate}
-                                                            onChange={e => updateTask(task.id, { endDate: e.target.value })}
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-xs font-semibold text-slate-700 mb-1">Stato</label>
-                                                        <select
-                                                            className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                                                            value={task.status}
-                                                            onChange={e => updateTask(task.id, { status: e.target.value as Task['status'] })}
-                                                        >
-                                                            {Object.entries(statusLabels).map(([value, label]) => (
-                                                                <option key={value} value={value}>{label}</option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-xs font-semibold text-slate-700 mb-1">Colore</label>
-                                                        <select
-                                                            className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                                                            value={task.color}
-                                                            onChange={e => updateTask(task.id, { color: e.target.value })}
-                                                        >
-                                                            {colorOptions.map(opt => (
-                                                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-xs font-semibold text-slate-700 mb-1">Avanzamento (%)</label>
-                                                        <input
-                                                            type="number"
-                                                            min="0"
-                                                            max="100"
-                                                            className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                                                            value={task.progress}
-                                                            onChange={e => updateTask(task.id, { progress: parseInt(e.target.value) || 0 })}
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <div className="flex gap-2">
-                                                    <button
-                                                        onClick={() => setEditingTaskId(null)}
-                                                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm transition-colors"
-                                                    >
-                                                        <Save size={16} />
-                                                        Salva
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setEditingTaskId(null)}
-                                                        className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-semibold text-sm transition-colors"
-                                                    >
-                                                        Chiudi
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            // View Mode
-                                            <div className="space-y-2">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="font-semibold text-slate-800 text-sm">{task.name}</div>
-                                                        <span className={`text-xs px-2 py-0.5 rounded-full ${colors.bg} ${colors.text} border ${colors.border}`}>
-                                                            {statusLabels[task.status]}
-                                                        </span>
-                                                        <span className="text-xs text-slate-500">{task.progress}%</span>
-                                                    </div>
-                                                    <div className="flex gap-1">
+                                                    <div className="flex gap-2">
                                                         <button
-                                                            onClick={() => setEditingTaskId(task.id)}
-                                                            className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                                            title="Modifica"
+                                                            onClick={() => setEditingTaskId(null)}
+                                                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm transition-colors"
                                                         >
-                                                            <Edit2 size={18} />
+                                                            <Save size={16} />
+                                                            Salva
                                                         </button>
                                                         <button
-                                                            onClick={() => updateTask(task.id, {
-                                                                status: task.status === 'completed' ? 'in-progress' : 'completed',
-                                                                progress: task.status === 'completed' ? task.progress : 100
-                                                            })}
-                                                            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
-                                                            title="Segna come completato"
+                                                            onClick={() => setEditingTaskId(null)}
+                                                            className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-semibold text-sm transition-colors"
                                                         >
-                                                            <CheckCircle2 size={18} />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setDeletingTaskId(task.id)}
-                                                            className="p-2 text-rose-600 hover:bg-rose-50 rounded transition-colors"
-                                                            title="Elimina"
-                                                        >
-                                                            <Trash2 size={18} />
+                                                            Chiudi
                                                         </button>
                                                     </div>
                                                 </div>
-                                                <div className="relative h-12 bg-slate-50 rounded-lg border border-slate-200 overflow-hidden">
+                                            ) : (
+                                                // View Mode
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="font-semibold text-slate-800 text-sm">{task.name}</div>
+                                                            <span className={`text-xs px-2 py-0.5 rounded-full ${colors.bg} ${colors.text} border ${colors.border}`}>
+                                                                {statusLabels[task.status]}
+                                                            </span>
+                                                            <span className="text-xs text-slate-500">{task.progress}%</span>
+                                                        </div>
+                                                        <div className="flex gap-1">
+                                                            <button
+                                                                onClick={() => setEditingTaskId(task.id)}
+                                                                className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                                                title="Modifica"
+                                                            >
+                                                                <Edit2 size={18} />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => updateTask(task.id, {
+                                                                    status: task.status === 'completed' ? 'in-progress' : 'completed',
+                                                                    progress: task.status === 'completed' ? task.progress : 100
+                                                                })}
+                                                                className="p-2 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                                                                title="Segna come completato"
+                                                            >
+                                                                <CheckCircle2 size={18} />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setDeletingTaskId(task.id)}
+                                                                className="p-2 text-rose-600 hover:bg-rose-50 rounded transition-colors"
+                                                                title="Elimina"
+                                                            >
+                                                                <Trash2 size={18} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
                                                     <div
-                                                        className="absolute top-1 h-10 rounded-md shadow-sm flex items-center justify-between px-3 text-white text-xs font-bold transition-all"
-                                                        style={{
-                                                            left: position.left,
-                                                            width: position.width,
-                                                            backgroundColor: task.color
-                                                        }}
+                                                        className="relative h-12 bg-slate-50 rounded-lg border border-slate-200 overflow-hidden cursor-ew-resize group/bar"
+                                                        onMouseDown={(e) => handleProgressMouseDown(e, task)}
                                                     >
-                                                        <span className="truncate">{new Date(task.startDate).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}</span>
-                                                        <span className="truncate">{new Date(task.endDate).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}</span>
+                                                        <div
+                                                            className="absolute top-1 h-10 rounded-md shadow-sm flex items-center justify-between px-3 text-white text-xs font-bold transition-all select-none"
+                                                            style={{
+                                                                left: position.left,
+                                                                width: position.width,
+                                                                backgroundColor: task.color,
+                                                                opacity: 0.9
+                                                            }}
+                                                        >
+                                                            <span className="truncate">{new Date(task.startDate).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}</span>
+                                                            <span className="truncate">{new Date(task.endDate).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}</span>
+                                                        </div>
+                                                        {/* Progress bar inside */}
+                                                        <div
+                                                            className="absolute top-2 h-8 rounded bg-white/30 backdrop-blur-sm flex items-center justify-center text-[10px] font-black text-white pointer-events-none"
+                                                            style={{
+                                                                left: position.left,
+                                                                width: `calc(${position.width} * ${task.progress / 100})`,
+                                                                marginLeft: '4px',
+                                                                marginTop: '4px'
+                                                            }}
+                                                        >
+                                                            {task.progress > 15 && `${task.progress}%`}
+                                                        </div>
+
+                                                        {/* Drag Handle Indicator */}
+                                                        <div
+                                                            className="absolute top-1 h-10 w-1 bg-white/40 opacity-0 group-hover/bar:opacity-100 transition-opacity"
+                                                            style={{
+                                                                left: `calc(${position.left} + ${position.width} * ${task.progress / 100})`,
+                                                            }}
+                                                        />
                                                     </div>
-                                                    {/* Progress bar inside */}
-                                                    <div
-                                                        className="absolute top-1 h-10 rounded-md bg-black/20"
-                                                        style={{
-                                                            left: position.left,
-                                                            width: `calc(${position.width} * ${task.progress / 100})`
-                                                        }}
-                                                    />
                                                 </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
                 </div>

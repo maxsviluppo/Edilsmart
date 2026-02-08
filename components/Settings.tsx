@@ -548,6 +548,7 @@ const Settings: React.FC = () => {
                 confirmText={confirmModalState.confirmText}
                 onConfirm={confirmModalState.onConfirm}
                 onCancel={confirmModalState.onCancel}
+            />
         </div>
     );
 };

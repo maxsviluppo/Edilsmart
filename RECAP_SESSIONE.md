@@ -71,3 +71,27 @@
 
 ---
 **Nota Tecnica**: Il progetto locale è stabile e funzionante su http://localhost:3000. Il blocco attuale è solo il mancato allineamento tra il codice locale (corretto) e quello su GitHub (vecchio), che causa l'errore di build su Vercel.
+
+6. **💰 NUOVO: Modulo Paghe e Stipendi** (14/01/2026):
+    *   **Componente `Payroll.tsx`**: Implementato modulo completo per la gestione spese personale.
+    *   **Features principali**:
+        - **Paghe e Stipendi Completo**:
+          - **Vista Mensile**: Matrice Giorni/Dipendenti per inserimento rapido.
+          - **Report e Grafici**: Grafico a torta dinamico "Ripartizione Spese" che mostra la distribuzione dei costi per dipendente, con colori dedicati.
+          - **Gestione Note**: Box "Note del Mese" con funzionalità di aggiunta, modifica ed eliminazione per annotare scadenze o dettagli (es. bonifici, ferie).
+          - **Totali Automatici**: Calcolo in tempo reale dei totali giornalieri e mensili.
+          - **Gestione Dipendenti**: Anagrafica personalizzabile (Nome, Ruolo, Tariffa).
+        - **Integrazione**: Aggiunta voce "Paghe e Stipendi" nel menu laterale con icona Wallet.
+        - **Design**: Rispetto del layout richiesto, senza sezione "Spese Cantiere" ridondante.
+    *   **Backup**: Creato `backup_payroll_update.zip` con i sorgenti aggiornati.
+    *   **Backup Finale**: Generato archivio completo `backup_edilsmart_14_01_2026_finale.zip` (esclusi node_modules) a chiusura sessione.
+    
+7. **📊 Integrazione Totale Contabilità e Isolamento Bug** (14/01/2026 - Notte):
+    *   **Contabilità Integrata**: Completato il modulo "Contabilità" (`Accounting.tsx`) con:
+        - Scheda **Fornitori**: Rubrica fornitori completa con gestione contatti e categorie.
+        - Scheda **Fatture Fornitori**: Registro specifico per le fatture di acquisto, ora sincronizzato con il modulo principale.
+    *   **Bug Fix Critico ("White Screen of Death")**:
+        - Risolto crash della pagina "Fatture e Preventivi" causato da dati incompatibili generati dalla vecchia versione del modulo contabilità.
+        - **Recupero Dati**: Implementato script di migrazione automatica (`fix_legacy_invoice_data`) che ha ripristinato i dati corrotti (importi a zero), rendendoli nuovamente visibili e corretti.
+        - **Robustezza**: Blindato il componente `InvoicesQuotes.tsx` per prevenire crash futuri con dati incompleti.
+    *   **File da Aggiornare su GitHub**: `Accounting.tsx`, `InvoicesQuotes.tsx`, `types.ts`, `Payroll.tsx`, `Layout.tsx`.
