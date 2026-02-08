@@ -10,6 +10,7 @@ interface Task {
     status: 'planned' | 'in-progress' | 'completed' | 'delayed';
     progress: number;
     color: string;
+    dependencies?: string[];
 }
 
 interface CronoprogrammaProps {
@@ -96,16 +97,56 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
             endDate: newTask.endDate!,
             status: newTask.status as Task['status'] || 'planned',
             progress: newTask.progress || 0,
-            color: newTask.color || '#3b82f6'
+            color: newTask.color || '#3b82f6',
+            dependencies: newTask.dependencies || []
         };
 
         setTasks([...tasks, task]);
-        setNewTask({ name: '', startDate: '', endDate: '', status: 'planned', progress: 0, color: '#3b82f6' });
+        setNewTask({ name: '', startDate: '', endDate: '', status: 'planned', progress: 0, color: '#3b82f6', dependencies: [] });
         setIsAddingTask(false);
     };
 
     const updateTask = (id: string, updates: Partial<Task>) => {
-        setTasks(tasks.map(t => t.id === id ? { ...t, ...updates } : t));
+        setTasks(prevTasks => {
+            const taskToUpdate = prevTasks.find(t => t.id === id);
+            if (!taskToUpdate) return prevTasks;
+
+            const updatedTasks = [...prevTasks];
+            const taskIndex = updatedTasks.findIndex(t => t.id === id);
+            const oldEndDate = taskToUpdate.endDate;
+            const oldStartDate = taskToUpdate.startDate;
+
+            updatedTasks[taskIndex] = { ...taskToUpdate, ...updates };
+
+            // Cascade changes if dates changed
+            if (updates.endDate && updates.endDate !== oldEndDate) {
+                const delta = new Date(updates.endDate).getTime() - new Date(oldEndDate).getTime();
+                propagateDependencyChange(id, delta, updatedTasks, 'endDate');
+            } else if (updates.startDate && updates.startDate !== oldStartDate) {
+                const delta = new Date(updates.startDate).getTime() - new Date(oldStartDate).getTime();
+                propagateDependencyChange(id, delta, updatedTasks, 'startDate');
+            }
+
+            return updatedTasks;
+        });
+    };
+
+    const propagateDependencyChange = (parentId: string, deltaMs: number, allTasks: Task[], type: 'startDate' | 'endDate') => {
+        allTasks.forEach((task, index) => {
+            if (task.dependencies?.includes(parentId)) {
+                const newStart = new Date(new Date(task.startDate).getTime() + deltaMs);
+                const newEnd = new Date(new Date(task.endDate).getTime() + deltaMs);
+
+                allTasks[index] = {
+                    ...task,
+                    startDate: newStart.toISOString().split('T')[0],
+                    endDate: newEnd.toISOString().split('T')[0]
+                };
+
+                // Recursively propagate
+                propagateDependencyChange(task.id, deltaMs, allTasks, type);
+            }
+        });
     };
 
     const deleteTask = (id: string) => {
@@ -370,6 +411,22 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
                                 onChange={e => setNewTask({ ...newTask, progress: parseInt(e.target.value) || 0 })}
                             />
                         </div>
+                        <div className="lg:col-span-2">
+                            <label className="block text-sm font-semibold text-slate-700 mb-1">Dipendenza (Propaga Ritardi)</label>
+                            <select
+                                className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                                value={newTask.dependencies?.[0] || ''}
+                                onChange={e => setNewTask({ ...newTask, dependencies: e.target.value ? [e.target.value] : [] })}
+                            >
+                                <option value="">Nessuna (Attività Indipendente)</option>
+                                {tasks.map(t => (
+                                    <option key={t.id} value={t.id}>{t.name}</option>
+                                ))}
+                            </select>
+                            <p className="text-[10px] text-slate-400 mt-1 italic">
+                                Scegli un'attività esistente per collegarle: se la prima viene spostata, questa seguirà automaticamente.
+                            </p>
+                        </div>
                     </div>
                     <div className="flex gap-2 mt-4">
                         <button
@@ -382,7 +439,7 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
                         <button
                             onClick={() => {
                                 setIsAddingTask(false);
-                                setNewTask({ name: '', startDate: '', endDate: '', status: 'planned', progress: 0, color: '#3b82f6' });
+                                setNewTask({ name: '', startDate: '', endDate: '', status: 'planned', progress: 0, color: '#3b82f6', dependencies: [] });
                             }}
                             className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg flex items-center gap-2 font-bold"
                         >
@@ -532,6 +589,19 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
                                                             </select>
                                                         </div>
                                                         <div>
+                                                            <label className="block text-xs font-semibold text-slate-700 mb-1">Dipendenza</label>
+                                                            <select
+                                                                className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                                                                value={task.dependencies?.[0] || ''}
+                                                                onChange={e => updateTask(task.id, { dependencies: e.target.value ? [e.target.value] : [] })}
+                                                            >
+                                                                <option value="">Nessuna (Libera)</option>
+                                                                {tasks.filter(t => t.id !== task.id).map(t => (
+                                                                    <option key={t.id} value={t.id}>{t.name}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                        <div>
                                                             <label className="block text-xs font-semibold text-slate-700 mb-1">Avanzamento (%)</label>
                                                             <input
                                                                 type="number"
@@ -564,7 +634,15 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
                                                 <div className="space-y-2">
                                                     <div className="flex items-center justify-between">
                                                         <div className="flex items-center gap-3">
-                                                            <div className="font-semibold text-slate-800 text-sm">{task.name}</div>
+                                                            <div className="font-semibold text-slate-800 text-sm flex items-center gap-2">
+                                                                {task.name}
+                                                                {task.dependencies && task.dependencies.length > 0 && (
+                                                                    <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                                                        <Clock size={10} />
+                                                                        Dipendente
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                             <span className={`text-xs px-2 py-0.5 rounded-full ${colors.bg} ${colors.text} border ${colors.border}`}>
                                                                 {statusLabels[task.status]}
                                                             </span>
