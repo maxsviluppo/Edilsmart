@@ -132,10 +132,10 @@ const Layout: React.FC<LayoutProps> = ({
             onClick={onNewProject}
             className={`w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center justify-center transition-all shadow-lg shadow-emerald-900/20 group 
               ${(isSidebarOpen || isMobileSidebarOpen) ? 'px-4 py-3' : 'p-3 aspect-square'}`}
-            title="Crea Nuovo Progetto"
+            title="Crea Nuovo Cantiere"
           >
             <Plus size={24} className={`${(isSidebarOpen || isMobileSidebarOpen) ? 'mr-2' : ''} transition-transform group-hover:rotate-90`} />
-            {(isSidebarOpen || isMobileSidebarOpen) && <span className="font-bold whitespace-nowrap">Nuovo Progetto</span>}
+            {(isSidebarOpen || isMobileSidebarOpen) && <span className="font-bold whitespace-nowrap">Nuovo Cantiere</span>}
           </button>
         </div>
 
@@ -178,7 +178,7 @@ const Layout: React.FC<LayoutProps> = ({
               className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg flex items-center shadow-sm text-sm font-medium hover:shadow-md transition-all active:scale-95"
             >
               <Plus size={18} className="mr-2" />
-              Nuovo Progetto
+              Nuovo Cantiere
             </button>
             <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600">
               AD

@@ -15,16 +15,25 @@ import Documents from './components/Documents';
 import Payroll from './components/Payroll';
 import { HardHat, Clock, Calendar, DollarSign, User } from 'lucide-react';
 import { Project } from './types';
+import { loadInvoices, saveInvoices, loadQuotes, saveQuotes } from './services/invoiceService';
+import { loadDocuments, saveDocuments } from './services/documentService';
 
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [projects, setProjects] = useState<Project[]>([
-    { id: '1', name: 'Ristrutturazione Villa Rossi', client: 'Giuseppe Rossi', status: 'In Corso', budget: 150000, startDate: '2024-01-15', endDate: '2024-12-31', iva: 10, progress: 45, location: 'Via Roma 10', totalExpenses: 65000, revenue: 150000 },
-    { id: '2', name: 'Rifacimento Facciata Condominio', client: 'Amm. Bianchi', status: 'In attesa', budget: 85000, startDate: '2024-03-01', endDate: '2024-09-30', iva: 20, progress: 0, location: 'Piazza Garibaldi 2', totalExpenses: 5000, revenue: 85000 },
-    { id: '3', name: 'Nuova Costruzione Box Auto', client: 'Luigi Verdi', status: 'Pianificato', budget: 35000, startDate: '2024-04-10', endDate: '2024-08-15', iva: 10, progress: 0, totalExpenses: 0, revenue: 35000 },
-    { id: '4', name: 'Manutenzione Straordinaria Tetto', client: 'Condominio Parco', status: 'Completato', budget: 28000, startDate: '2023-11-05', endDate: '2024-02-20', iva: 20, progress: 100, totalExpenses: 22000, revenue: 28000 },
-  ]);
+  const [projects, setProjects] = useState<Project[]>(() => {
+    const saved = localStorage.getItem('projects');
+    return saved ? JSON.parse(saved) : [
+      { id: '1', name: 'Ristrutturazione Villa Rossi', client: 'Giuseppe Rossi', status: 'In Corso', budget: 150000, startDate: '2024-01-15', endDate: '2024-12-31', iva: 10, progress: 45, location: 'Via Roma 10', totalExpenses: 65000, revenue: 150000 },
+      { id: '2', name: 'Rifacimento Facciata Condominio', client: 'Amm. Bianchi', status: 'In attesa', budget: 85000, startDate: '2024-03-01', endDate: '2024-09-30', iva: 20, progress: 0, location: 'Piazza Garibaldi 2', totalExpenses: 5000, revenue: 85000 },
+      { id: '3', name: 'Nuova Costruzione Box Auto', client: 'Luigi Verdi', status: 'Pianificato', budget: 35000, startDate: '2024-04-10', endDate: '2024-08-15', iva: 10, progress: 0, totalExpenses: 0, revenue: 35000 },
+      { id: '4', name: 'Manutenzione Straordinaria Tetto', client: 'Condominio Parco', status: 'Completato', budget: 28000, startDate: '2023-11-05', endDate: '2024-02-20', iva: 20, progress: 100, totalExpenses: 22000, revenue: 28000 },
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('projects', JSON.stringify(projects));
+  }, [projects]);
 
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
@@ -49,9 +58,34 @@ const App: React.FC = () => {
   };
 
   const handleDeleteProject = (projectId: string) => {
+    // 1. Elimina Computo Metrico
+    localStorage.removeItem(`computo_${projectId}`);
+
+    // 2. Elimina Cronoprogramma
+    localStorage.removeItem(`cronoprogramma_${projectId}`);
+
+    // 3. Elimina Fatture collegate
+    const invoices = loadInvoices();
+    const updatedInvoices = invoices.filter(inv => inv.projectId !== projectId);
+    saveInvoices(updatedInvoices);
+
+    // 4. Elimina Preventivi collegati
+    const quotes = loadQuotes();
+    const updatedQuotes = quotes.filter(q => q.projectId !== projectId);
+    saveQuotes(updatedQuotes);
+
+    // 5. Elimina Documenti collegati
+    const documents = loadDocuments();
+    const updatedDocuments = documents.filter(doc => doc.projectId !== projectId);
+    saveDocuments(updatedDocuments);
+
+    // 6. Aggiorna stato progetti e localStorage (tramite useEffect)
     setProjects(projects.filter(p => p.id !== projectId));
     setSelectedProjectId('');
     setActiveTab('projects');
+
+    // Opzionale: Mostra feedback (richiederebbe Toast qui o tramite prop drilling)
+    alert("Cantiere e tutti i dati associati eliminati con successo.");
   };
 
   const getStatusColor = (status: string) => {

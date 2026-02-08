@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Save, Upload, Building, AlertCircle } from 'lucide-react';
+import Toast, { ToastType } from './Toast';
+import ConfirmModal from './ConfirmModal';
 
 export interface CompanySettings {
     name: string;
@@ -32,6 +34,24 @@ const Settings: React.FC = () => {
 
     const [deletingCategory, setDeletingCategory] = useState<string | null>(null);
     const [deletingUnit, setDeletingUnit] = useState<string | null>(null);
+
+    // Toast & Modal State
+    const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+    const [confirmModalState, setConfirmModalState] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        type?: 'danger' | 'warning' | 'info';
+        confirmText?: string;
+        onConfirm: () => void;
+        onCancel: () => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { },
+        onCancel: () => { }
+    });
 
     useEffect(() => {
         const saved = localStorage.getItem('company_settings');
@@ -444,20 +464,90 @@ const Settings: React.FC = () => {
                     </div>
                     <button
                         onClick={() => {
-                            if (confirm("SEI SICURO? Questa operazione cancellerà PER SEMPRE tutti i dati dell'applicazione. Non potrai annullare questa azione!")) {
-                                if (confirm("CONFERMA FINALE: Sei davvero sicuro di voler azzerare TUTTO?")) {
-                                    localStorage.clear();
-                                    alert("Dati cancellati correttamente. L'applicazione verrà ricaricata.");
-                                    window.location.reload();
-                                }
-                            }
+                            setConfirmModalState({
+                                isOpen: true,
+                                title: "Reset di Fabbrica",
+                                message: "SEI SICURO? Questa operazione cancellerà PER SEMPRE tutti i dati dell'applicazione. Non potrai annullare questa azione!",
+                                type: 'danger',
+                                onConfirm: () => {
+                                    // Double confirmation for safety
+                                    setConfirmModalState({
+                                        isOpen: true,
+                                        title: "NON SI TORNA INDIETRO",
+                                        message: "CONFERMA FINALE: Sei davvero sicuro di voler azzerare TUTTO?",
+                                        type: 'danger',
+                                        confirmText: 'SÌ, CANCELLA TUTTO',
+                                        onConfirm: () => {
+                                            localStorage.clear();
+                                            setToast({ message: "Reset completato! Riavvio in corso...", type: 'success' });
+                                            setConfirmModalState(prev => ({ ...prev, isOpen: false }));
+                                            setTimeout(() => window.location.reload(), 2000);
+                                        },
+                                        onCancel: () => setConfirmModalState(prev => ({ ...prev, isOpen: false }))
+                                    });
+                                },
+                                onCancel: () => setConfirmModalState(prev => ({ ...prev, isOpen: false }))
+                            });
                         }}
                         className="bg-rose-600 hover:bg-rose-700 text-white px-6 py-4 rounded-lg font-bold shadow-lg shadow-rose-900/20 active:scale-95 transition-all w-full md:w-auto text-center"
                     >
                         AZZERA TUTTI I DATI
                     </button>
+                    <button
+                        onClick={() => {
+                            setConfirmModalState({
+                                isOpen: true,
+                                title: "Caricamento Dati Demo",
+                                message: "Vuoi caricare i dati demo di esempio? Questo sovrascriverà i dati attuali se presenti.",
+                                type: 'info',
+                                confirmText: "Carica Demo",
+                                onConfirm: () => {
+                                    const demoProjects = [
+                                        { id: '1', name: 'Ristrutturazione Villa Rossi', client: 'Giuseppe Rossi', status: 'In Corso', budget: 150000, startDate: '2024-01-15', endDate: '2024-12-31', iva: 10, progress: 45, location: 'Via Roma 10', totalExpenses: 65000, revenue: 150000 },
+                                        { id: '2', name: 'Rifacimento Facciata Condominio', client: 'Amm. Bianchi', status: 'In attesa', budget: 85000, startDate: '2024-03-01', endDate: '2024-09-30', iva: 20, progress: 0, location: 'Piazza Garibaldi 2', totalExpenses: 5000, revenue: 85000 },
+                                        { id: '3', name: 'Nuova Costruzione Box Auto', client: 'Luigi Verdi', status: 'Pianificato', budget: 35000, startDate: '2024-04-10', endDate: '2024-08-15', iva: 10, progress: 0, totalExpenses: 0, revenue: 35000 },
+                                        { id: '4', name: 'Manutenzione Straordinaria Tetto', client: 'Condominio Parco', status: 'Completato', budget: 28000, startDate: '2023-11-05', endDate: '2024-02-20', iva: 20, progress: 100, totalExpenses: 22000, revenue: 28000 },
+                                    ];
+                                    localStorage.setItem('projects', JSON.stringify(demoProjects));
+                                    localStorage.setItem('company_settings', JSON.stringify({
+                                        name: 'EdilSmart Demo SRL',
+                                        address: 'Via Esempio 123, Milano',
+                                        vat: '12345678901',
+                                        email: 'demo@edilsmart.it',
+                                        phone: '02 1234567',
+                                        logoUrl: ''
+                                    }));
+                                    setToast({ message: "Dati demo caricati con successo!", type: 'success' });
+                                    setConfirmModalState(prev => ({ ...prev, isOpen: false }));
+                                    setTimeout(() => window.location.reload(), 1500);
+                                },
+                                onCancel: () => setConfirmModalState(prev => ({ ...prev, isOpen: false }))
+                            });
+                        }}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-lg font-bold shadow-lg shadow-blue-900/20 active:scale-95 transition-all w-full md:w-auto text-center mt-4 md:mt-0"
+                    >
+                        CARICA DATI DEMO
+                    </button>
                 </div>
             </div>
+
+            {/* Global Components */}
+            {toast && (
+                <Toast
+                    message={toast.message}
+                    type={toast.type}
+                    onClose={() => setToast(null)}
+                />
+            )}
+
+            <ConfirmModal
+                isOpen={confirmModalState.isOpen}
+                title={confirmModalState.title}
+                message={confirmModalState.message}
+                type={confirmModalState.type as any}
+                confirmText={confirmModalState.confirmText}
+                onConfirm={confirmModalState.onConfirm}
+                onCancel={confirmModalState.onCancel}
         </div>
     );
 };
