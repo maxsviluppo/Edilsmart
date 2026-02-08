@@ -27,24 +27,21 @@ import {
   Phone,
   Mail
 } from 'lucide-react';
-import { Expense, Supplier, Invoice } from '../types';
+import { Expense, Supplier, Invoice, Project } from '../types';
 import { addInvoice, deleteInvoice as deleteInvoiceSvc, loadInvoices } from '../services/invoiceService';
 import ConfirmModal from './ConfirmModal';
 import Toast, { ToastType } from './Toast';
 
 interface AccountingProps {
+  selectedProjectId?: string;
+  projects?: Project[];
+  onUpdateProject?: (project: Project) => void;
   onCreateQuote?: () => void;
 }
 
-const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
-  const [transactions, setTransactions] = useState<Expense[]>([
-    { id: '1', date: '2023-10-15', description: 'Acquisto Ferramenta', amount: -245.50, category: 'Materiali', status: 'Pagato' },
-    { id: '2', date: '2023-10-14', description: 'Fattura Cliente - Acconto Lavori', amount: 5000.00, category: 'Ricavi', status: 'Pagato' },
-    { id: '3', date: '2023-10-12', description: 'Paghe Settimanali - Squadra A', amount: -3200.00, category: 'Manodopera', status: 'In Attesa' },
-    { id: '4', date: '2023-10-10', description: 'Noleggio Gru Autocarrata', amount: -850.00, category: 'Noleggi', status: 'Pagato' },
-    { id: '5', date: '2023-10-09', description: 'Trasporto Macerie Discarica', amount: -420.00, category: 'Trasporti', status: 'Pagato' },
-    { id: '6', date: '2023-10-08', description: 'Fornitura Marmi Pregiati', amount: -12500.00, category: 'Materiali Speciali', status: 'In Attesa' },
-  ]);
+const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, onUpdateProject, onCreateQuote }) => {
+  const project = projects?.find(p => p.id === selectedProjectId);
+  const [transactions, setTransactions] = useState<Expense[]>([]);
 
   const [activeTab, setActiveTab] = useState<'transactions' | 'invoices' | 'suppliers'>('transactions');
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -56,6 +53,16 @@ const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
 
   // Load categories and other data from localStorage
   useEffect(() => {
+    // If project has expenses, use them, otherwise check localStorage for legacy/global
+    if (project) {
+      setTransactions(project.expenses || []);
+    } else {
+      const globalExpenses = localStorage.getItem('global_transactions');
+      if (globalExpenses) {
+        try { setTransactions(JSON.parse(globalExpenses)); } catch (e) { }
+      }
+    }
+
     const savedCategories = localStorage.getItem('accounting_categories');
     if (savedCategories) {
       try {
@@ -73,7 +80,11 @@ const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
     const savedInvoices = loadInvoices();
     if (savedInvoices) {
       // Show supplier invoices (ricevuta) plus legacy ones (missing type)
-      setInvoices(savedInvoices.filter(i => i.type === 'ricevuta' || !i.type));
+      let filteredInvoices = savedInvoices.filter(i => i.type === 'ricevuta' || !i.type);
+      if (project) {
+        filteredInvoices = filteredInvoices.filter(i => i.projectId === project.id);
+      }
+      setInvoices(filteredInvoices);
     }
 
     // Listen for settings updates
@@ -88,7 +99,27 @@ const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
 
     window.addEventListener('company-settings-updated', handleSettingsUpdate);
     return () => window.removeEventListener('company-settings-updated', handleSettingsUpdate);
-  }, []);
+  }, [project?.id]);
+
+  // Sync transactions back to project if it changes
+  useEffect(() => {
+    if (project && onUpdateProject) {
+      const totalExpenses = Math.abs(transactions.filter(t => t.amount < 0).reduce((acc, t) => acc + t.amount, 0));
+      const totalIncome = transactions.filter(t => t.amount > 0).reduce((acc, t) => acc + t.amount, 0);
+
+      // Only update if there is a real difference to avoid infinite loops
+      if (JSON.stringify(project.expenses) !== JSON.stringify(transactions) || project.totalExpenses !== totalExpenses) {
+        onUpdateProject({
+          ...project,
+          expenses: transactions,
+          totalExpenses,
+          revenue: totalIncome || project.revenue // Optionally update project budget/revenue if relevant
+        });
+      }
+    } else if (!project) {
+      localStorage.setItem('global_transactions', JSON.stringify(transactions));
+    }
+  }, [transactions, project?.id]);
 
   // Filter States
   const [showFilters, setShowFilters] = useState(false);
@@ -252,7 +283,8 @@ const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
         taxAmount: 0,
         totalAmount: newInvoice.amount,
         status: newInvoice.status || 'Bozza',
-        notes: newInvoice.description
+        notes: newInvoice.description,
+        projectId: project?.id // Link invoice to project
       };
 
       const updated = addInvoice(invoice);
@@ -318,6 +350,39 @@ const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
 
   return (
     <div className="space-y-6">
+      {/* Project Header (if selected) */}
+      {project ? (
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
+              <Building2 size={24} />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">{project.name}</h2>
+              <p className="text-sm text-slate-500">Gestione contabile e flussi di cassa</p>
+            </div>
+          </div>
+          <div className="flex flex-col items-end">
+            <span className={`px-3 py-1 rounded-full text-xs font-bold border ${project.status === 'In Corso' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+              project.status === 'Completato' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                'bg-slate-50 text-slate-600 border-slate-100'
+              }`}>
+              {project.status}
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-amber-50 border border-amber-200 p-6 rounded-xl flex items-center justify-between">
+          <div className="flex items-center gap-3 text-amber-800">
+            <AlertCircle size={24} />
+            <div>
+              <p className="font-bold">Nessun cantiere selezionato</p>
+              <p className="text-sm">Stai visualizzando la contabilità globale. Seleziona un cantiere dal menu per dati specifici.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Navigation Tabs */}
       <div className="flex space-x-1 bg-white p-1 rounded-xl border border-slate-200 shadow-sm w-full md:w-fit overflow-x-auto no-scrollbar">
         <button
@@ -372,6 +437,7 @@ const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
               <h4 className="text-2xl font-bold text-slate-900">€ {netBalance.toLocaleString('it-IT', { minimumFractionDigits: 2 })}</h4>
             </div>
           </div>
+
 
           {/* Transactions Table Section */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -545,57 +611,7 @@ const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
             </div>
           </div>
 
-          {/* Additional UI Modules */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg relative overflow-hidden flex flex-col justify-between">
-              <div className="relative z-10">
-                <h4 className="text-indigo-400 font-bold uppercase tracking-wider text-xs mb-1">Fattura di Cortesia</h4>
-                <h3 className="text-xl font-bold mb-4">Genera Preventivo Rapido</h3>
-                <p className="text-slate-400 text-sm mb-6">Crea una fattura pro-forma o un preventivo professionale basato sui dati del computo metrico.</p>
-              </div>
-              <button
-                onClick={onCreateQuote}
-                className="bg-white text-slate-900 px-6 py-2 rounded-lg font-bold hover:bg-slate-100 transition-colors relative z-10 w-fit"
-              >
-                Crea Ora
-              </button>
-              <div className="absolute top-0 right-0 p-8 opacity-10">
-                <FileText size={120} />
-              </div>
-            </div>
 
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-              <h3 className="font-bold text-slate-800 mb-4 flex items-center">
-                <Truck size={20} className="mr-2 text-amber-600" />
-                Servizi di Trasporto
-              </h3>
-              <p className="text-sm text-slate-500 mb-4">Monitoraggio logistica e trasporti macerie del mese.</p>
-              <div className="p-3 bg-amber-50 rounded-lg border border-amber-100 mb-2">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs font-bold text-amber-800">Spesa Trasporti</span>
-                  <span className="text-sm font-bold text-amber-900">€ 1.840,00</span>
-                </div>
-                <div className="w-full bg-amber-200 rounded-full h-1.5">
-                  <div className="bg-amber-600 h-1.5 rounded-full" style={{ width: '65%' }}></div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-              <h3 className="font-bold text-slate-800 mb-4 flex items-center">
-                <Package size={20} className="mr-2 text-purple-600" />
-                Monitoraggio Categorie
-              </h3>
-              <div className="max-h-48 overflow-y-auto pr-2 space-y-2">
-                {categories.slice(-5).map((cat, i) => (
-                  <div key={i} className="flex items-center justify-between p-2 border rounded-lg bg-slate-50">
-                    <span className="text-xs font-medium text-slate-600">{cat}</span>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getCategoryStyle(cat)}`}>ATTIVA</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
 
           {/* Edit Transaction Modal */}
           {isEditModalOpen && editingTransaction && (
@@ -1023,8 +1039,8 @@ const Accounting: React.FC<AccountingProps> = ({ onCreateQuote }) => {
                         </td>
                         <td className="px-6 py-4 text-center">
                           <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${inv.status === 'Pagata' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
-                              inv.status === 'Scaduta' ? 'bg-rose-100 text-rose-700 border-rose-200' :
-                                'bg-amber-100 text-amber-700 border-amber-200'
+                            inv.status === 'Scaduta' ? 'bg-rose-100 text-rose-700 border-rose-200' :
+                              'bg-amber-100 text-amber-700 border-amber-200'
                             }`}>
                             {inv.status}
                           </span>

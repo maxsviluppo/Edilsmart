@@ -10,6 +10,7 @@ interface ComputoMetricoProps {
 
 const ComputoMetrico: React.FC<ComputoMetricoProps> = ({ project }) => {
   const [rows, setRows] = useState<ComputoRow[]>([]);
+  const [notes, setNotes] = useState<string>('');
   const [region, setRegion] = useState('');
 
   // Autocomplete State
@@ -30,26 +31,34 @@ const ComputoMetrico: React.FC<ComputoMetricoProps> = ({ project }) => {
     return () => window.removeEventListener('company-settings-updated', loadSettings);
   }, []);
 
-  // Load saved computo when project changes
+  // Load saved computo and notes when project changes
   useEffect(() => {
     if (project?.id) {
-      const saved = localStorage.getItem(`computo_${project.id}`);
-      if (saved) {
+      // Load Rows
+      const savedRows = localStorage.getItem(`computo_${project.id}`);
+      if (savedRows) {
         try {
-          setRows(JSON.parse(saved));
+          setRows(JSON.parse(savedRows));
         } catch (e) { console.error("Failed to load saved computo", e); }
       } else {
         setRows([]);
       }
+
+      // Load Notes
+      const savedNotes = localStorage.getItem(`computo_notes_${project.id}`);
+      setNotes(savedNotes || '');
     }
   }, [project?.id]);
 
   // Save on change
   useEffect(() => {
-    if (project?.id && rows.length > 0) {
-      localStorage.setItem(`computo_${project.id}`, JSON.stringify(rows));
+    if (project?.id) {
+      if (rows.length > 0) {
+        localStorage.setItem(`computo_${project.id}`, JSON.stringify(rows));
+      }
+      localStorage.setItem(`computo_notes_${project.id}`, notes);
     }
-  }, [rows, project?.id]);
+  }, [rows, notes, project?.id]);
 
   const addNewRow = () => {
     const newRow: ComputoRow = {
@@ -426,6 +435,23 @@ const ComputoMetrico: React.FC<ComputoMetricoProps> = ({ project }) => {
             EdilSmart Software - {companySettings?.name ? `${companySettings.name} - ` : ''} Committente: {project.client}
           </div>
         </div>
+      </div>
+
+      {/* Note del Progetto */}
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm print:mt-8">
+        <div className="flex items-center gap-2 mb-4 text-emerald-800">
+          <FileText size={20} />
+          <h3 className="font-bold uppercase text-sm tracking-wider">Note e Osservazioni del Computo</h3>
+        </div>
+        <textarea
+          className="w-full p-4 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm min-h-[150px] bg-slate-50/50 hover:bg-white transition-all"
+          placeholder="Inserisci qui annotazioni particolari, prescrizioni tecniche o note per il cantiere..."
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+        />
+        <p className="text-[11px] text-slate-400 mt-2 italic">
+          Le note vengono salvate automaticamente e sono specifiche per il cantiere: <strong>{project.name}</strong>.
+        </p>
       </div>
     </div>
   );

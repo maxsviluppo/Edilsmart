@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Project } from '../types';
-import { Calendar, Plus, Trash2, Edit2, Save, X, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Calendar, Plus, Trash2, Edit2, Save, X, Clock, CheckCircle2, AlertCircle, Link } from 'lucide-react';
 
 interface Task {
     id: string;
@@ -22,6 +22,9 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
     const [isAddingTask, setIsAddingTask] = useState(false);
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
     const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
+    const [dependencyMenuTaskId, setDependencyMenuTaskId] = useState<string | null>(null);
+    const [statusMenuTaskId, setStatusMenuTaskId] = useState<string | null>(null);
+    const [zoomLevel, setZoomLevel] = useState(40); // Pixel per singolo giorno
     const [newTask, setNewTask] = useState<Partial<Task>>({
         name: '',
         startDate: '',
@@ -156,17 +159,24 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
 
     // Helper Functions
     const getDateRange = () => {
+        const todayDate = new Date();
         if (tasks.length === 0) {
-            const todayDate = new Date();
-            const nextMonth = new Date(todayDate);
-            nextMonth.setMonth(nextMonth.getMonth() + 1);
-            return { minDate: todayDate, maxDate: nextMonth };
+            const nextSixMonths = new Date(todayDate);
+            nextSixMonths.setMonth(todayDate.getMonth() + 6);
+            return { minDate: todayDate, maxDate: nextSixMonths };
         }
 
         const dates = tasks.flatMap(t => [new Date(t.startDate), new Date(t.endDate)]);
+        const minTaskDate = new Date(Math.min(...dates.map(d => d.getTime())));
+        const maxTaskDate = new Date(Math.max(...dates.map(d => d.getTime())));
+
+        // Aggiungiamo un buffer di 4 mesi alla fine per permettere la visione futura
+        const bufferedMaxDate = new Date(maxTaskDate);
+        bufferedMaxDate.setMonth(bufferedMaxDate.getMonth() + 4);
+
         return {
-            minDate: new Date(Math.min(...dates.map(d => d.getTime()))),
-            maxDate: new Date(Math.max(...dates.map(d => d.getTime())))
+            minDate: minTaskDate,
+            maxDate: bufferedMaxDate
         };
     };
 
@@ -450,10 +460,50 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
                 </div>
             )}
 
+            {/* Scale Control Bar */}
+            <div className="bg-white px-6 py-3 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 text-slate-600">
+                        <Clock size={18} />
+                        <span className="text-sm font-bold uppercase tracking-wider">Densità Timeline</span>
+                    </div>
+                    <div className="flex items-center gap-3 bg-slate-100 p-2 rounded-lg">
+                        <button
+                            onClick={() => setZoomLevel(Math.max(15, zoomLevel - 10))}
+                            className="text-slate-400 hover:text-emerald-600 transition-colors"
+                            title="Rimpicciolisci"
+                        >
+                            <Calendar size={14} className="opacity-70" />
+                        </button>
+                        <input
+                            type="range"
+                            min="15"
+                            max="120"
+                            value={zoomLevel}
+                            onChange={(e) => setZoomLevel(parseInt(e.target.value))}
+                            className="w-32 h-1.5 bg-slate-300 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+                        />
+                        <button
+                            onClick={() => setZoomLevel(Math.min(120, zoomLevel + 10))}
+                            className="text-slate-400 hover:text-emerald-600 transition-colors"
+                            title="Ingrandisci"
+                        >
+                            <Calendar size={18} />
+                        </button>
+                    </div>
+                </div>
+                <div className="text-xs text-slate-500 font-medium italic">
+                    Scorri orizzontalmente per vedere tutto il periodo del progetto
+                </div>
+            </div>
+
             {/* Gantt Chart */}
             {tasks.length > 0 ? (
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
-                    <div className="min-w-[800px]">
+                <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+                    <div
+                        style={{ width: `${totalDaysInRange * zoomLevel}px`, minWidth: '100%' }}
+                        className="relative"
+                    >
                         {/* Timeline Header - Sticky */}
                         <div className="sticky top-0 z-30 bg-white border-b-2 border-slate-300 pb-2 mb-6 shadow-sm">
                             {/* Month Row */}
@@ -632,7 +682,7 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
                                             ) : (
                                                 // View Mode
                                                 <div className="space-y-2">
-                                                    <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-6">
                                                         <div className="flex items-center gap-3">
                                                             <div className="font-semibold text-slate-800 text-sm flex items-center gap-2">
                                                                 {task.name}
@@ -643,36 +693,124 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
                                                                     </span>
                                                                 )}
                                                             </div>
-                                                            <span className={`text-xs px-2 py-0.5 rounded-full ${colors.bg} ${colors.text} border ${colors.border}`}>
-                                                                {statusLabels[task.status]}
-                                                            </span>
+                                                            <div className="relative">
+                                                                <button
+                                                                    onClick={() => setStatusMenuTaskId(statusMenuTaskId === task.id ? null : task.id)}
+                                                                    className={`text-xs px-2 py-0.5 rounded-full ${colors.bg} ${colors.text} border ${colors.border} hover:brightness-95 transition-all cursor-pointer font-medium`}
+                                                                    title="Cambia Stato"
+                                                                >
+                                                                    {statusLabels[task.status]}
+                                                                </button>
+
+                                                                {statusMenuTaskId === task.id && (
+                                                                    <>
+                                                                        <div className="fixed inset-0 z-[105]" onClick={() => setStatusMenuTaskId(null)} />
+                                                                        <div className="absolute left-0 top-full mt-1 w-40 bg-white rounded-lg shadow-xl border border-slate-200 z-[110] overflow-hidden py-1 animate-in fade-in zoom-in-95 duration-100">
+                                                                            {Object.entries(statusLabels).map(([value, label]) => {
+                                                                                const sColors = statusColors[value as Task['status']];
+                                                                                const isCurrent = task.status === value;
+                                                                                return (
+                                                                                    <button
+                                                                                        key={value}
+                                                                                        onClick={() => {
+                                                                                            updateTask(task.id, {
+                                                                                                status: value as Task['status'],
+                                                                                                progress: value === 'completed' ? 100 : task.progress
+                                                                                            });
+                                                                                            setStatusMenuTaskId(null);
+                                                                                        }}
+                                                                                        className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center justify-between gap-2 group ${isCurrent ? 'bg-slate-50 font-bold' : ''}`}
+                                                                                    >
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <div className={`w-2 h-2 rounded-full ${sColors.bg} border ${sColors.border}`} />
+                                                                                            <span className={isCurrent ? 'text-slate-900' : 'text-slate-600'}>{label}</span>
+                                                                                        </div>
+                                                                                        {isCurrent && <CheckCircle2 size={12} className="text-emerald-500" />}
+                                                                                    </button>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    </>
+                                                                )}
+                                                            </div>
                                                             <span className="text-xs text-slate-500">{task.progress}%</span>
-                                                        </div>
-                                                        <div className="flex gap-1">
-                                                            <button
-                                                                onClick={() => setEditingTaskId(task.id)}
-                                                                className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                                                title="Modifica"
-                                                            >
-                                                                <Edit2 size={18} />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => updateTask(task.id, {
-                                                                    status: task.status === 'completed' ? 'in-progress' : 'completed',
-                                                                    progress: task.status === 'completed' ? task.progress : 100
-                                                                })}
-                                                                className="p-2 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
-                                                                title="Segna come completato"
-                                                            >
-                                                                <CheckCircle2 size={18} />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => setDeletingTaskId(task.id)}
-                                                                className="p-2 text-rose-600 hover:bg-rose-50 rounded transition-colors"
-                                                                title="Elimina"
-                                                            >
-                                                                <Trash2 size={18} />
-                                                            </button>
+
+                                                            <div className="h-4 w-[1px] bg-slate-200 mx-1" /> {/* Vertical Divider */}
+
+                                                            <div className="flex gap-1">
+                                                                <button
+                                                                    onClick={() => setEditingTaskId(task.id)}
+                                                                    className="p-1 px-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                                                    title="Modifica"
+                                                                >
+                                                                    <Edit2 size={16} />
+                                                                </button>
+                                                                <div className="relative">
+                                                                    <button
+                                                                        onClick={() => setDependencyMenuTaskId(dependencyMenuTaskId === task.id ? null : task.id)}
+                                                                        className={`p-1 px-2 rounded transition-colors ${task.dependencies && task.dependencies.length > 0 ? 'text-blue-700 bg-blue-100' : 'text-slate-500 hover:bg-slate-100'}`}
+                                                                        title="Gestisci Dipendenze"
+                                                                    >
+                                                                        <Link size={16} />
+                                                                    </button>
+
+                                                                    {dependencyMenuTaskId === task.id && (
+                                                                        <div className="absolute left-0 top-full mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 z-[100] p-4 animate-in fade-in slide-in-from-top-2">
+                                                                            <div className="flex items-center justify-between mb-3 border-b pb-2">
+                                                                                <h4 className="text-xs font-bold uppercase text-slate-500">Collega a:</h4>
+                                                                                <button onClick={() => setDependencyMenuTaskId(null)} className="text-slate-400 hover:text-slate-600">
+                                                                                    <X size={14} />
+                                                                                </button>
+                                                                            </div>
+                                                                            <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                                                                                {tasks.filter(t => t.id !== task.id).map(t => {
+                                                                                    const isLinked = task.dependencies?.includes(t.id);
+                                                                                    return (
+                                                                                        <label
+                                                                                            key={t.id}
+                                                                                            className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${isLinked ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50 text-slate-600'}`}
+                                                                                        >
+                                                                                            <input
+                                                                                                type="checkbox"
+                                                                                                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                                                                                checked={isLinked}
+                                                                                                onChange={() => {
+                                                                                                    const currentDeps = task.dependencies || [];
+                                                                                                    const newDeps = isLinked
+                                                                                                        ? currentDeps.filter(id => id !== t.id)
+                                                                                                        : [...currentDeps, t.id];
+                                                                                                    updateTask(task.id, { dependencies: newDeps });
+                                                                                                }}
+                                                                                            />
+                                                                                            <span className="text-xs font-medium truncate">{t.name}</span>
+                                                                                        </label>
+                                                                                    );
+                                                                                })}
+                                                                                {tasks.length <= 1 && (
+                                                                                    <p className="text-[10px] text-slate-400 italic py-2">Nessuna altra attività disponibile</p>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => updateTask(task.id, {
+                                                                        status: task.status === 'completed' ? 'in-progress' : 'completed',
+                                                                        progress: task.status === 'completed' ? task.progress : 100
+                                                                    })}
+                                                                    className="p-1 px-2 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                                                                    title="Segna come completato"
+                                                                >
+                                                                    <CheckCircle2 size={16} />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => setDeletingTaskId(task.id)}
+                                                                    className="p-1 px-2 text-rose-600 hover:bg-rose-50 rounded transition-colors"
+                                                                    title="Elimina"
+                                                                >
+                                                                    <Trash2 size={16} />
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                     <div
@@ -707,23 +845,13 @@ const Cronoprogramma: React.FC<CronoprogrammaProps> = ({ project }) => {
                                                                 zIndex: 10
                                                             }}
                                                         >
-                                                            {parseFloat(position.width) > 8 ? (
-                                                                <>
-                                                                    <span className="bg-black/20 px-1 rounded backdrop-blur-[2px]">
-                                                                        {new Date(task.startDate).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })}
-                                                                    </span>
-                                                                    {parseFloat(position.width) > 15 && (
-                                                                        <span className="text-[9px] opacity-90">{task.progress}%</span>
-                                                                    )}
-                                                                    <span className="bg-black/20 px-1 rounded backdrop-blur-[2px]">
-                                                                        {new Date(task.endDate).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })}
-                                                                    </span>
-                                                                </>
-                                                            ) : (
-                                                                <div className="w-full text-center truncate">
-                                                                    {task.progress}%
-                                                                </div>
-                                                            )}
+                                                            <span className="bg-black/20 px-1 rounded backdrop-blur-[2px] whitespace-nowrap">
+                                                                {new Date(task.startDate).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })}
+                                                            </span>
+                                                            <span className="text-[9px] opacity-90">{task.progress}%</span>
+                                                            <span className="bg-black/20 px-1 rounded backdrop-blur-[2px] whitespace-nowrap">
+                                                                {new Date(task.endDate).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })}
+                                                            </span>
                                                         </div>
 
                                                         {/* 4. Interactive Invisible Layer for Dragging */}

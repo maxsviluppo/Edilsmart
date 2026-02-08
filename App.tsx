@@ -110,11 +110,16 @@ const App: React.FC = () => {
       case 'pricelists':
         return <PriceListManager />;
       case 'accounting':
-        return <Accounting onCreateQuote={() => {
-          setActiveTab('invoices');
-          setInvoicesAction('new-quote');
-          setTimeout(() => setInvoicesAction(undefined), 100);
-        }} />;
+        return <Accounting
+          selectedProjectId={selectedProjectId}
+          projects={projects}
+          onUpdateProject={handleUpdateProject}
+          onCreateQuote={() => {
+            setActiveTab('invoices');
+            setInvoicesAction('new-quote');
+            setTimeout(() => setInvoicesAction(undefined), 100);
+          }}
+        />;
       case 'documents':
         return <Documents projects={projects} selectedProjectId={selectedProjectId} />;
       case 'statistics':

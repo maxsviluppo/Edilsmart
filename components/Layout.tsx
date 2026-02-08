@@ -139,7 +139,7 @@ const Layout: React.FC<LayoutProps> = ({
           </button>
         </div>
 
-        <nav className="flex-1 mt-2 px-4 space-y-2 overflow-y-auto no-scrollbar">
+        <nav className="flex-1 mt-2 px-4 space-y-2 overflow-y-auto sidebar-scroll">
           {menuItems.map((item) => (
             <button
               key={item.id}

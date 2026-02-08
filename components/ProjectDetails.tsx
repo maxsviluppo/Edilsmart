@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Project } from '../types';
 import {
     Building,
@@ -8,12 +8,13 @@ import {
     Euro,
     TrendingUp,
     FileText,
-    Calculator,
     Receipt,
     Settings as SettingsIcon,
     ArrowRight,
     Clock,
-    GanttChart
+    GanttChart,
+    StickyNote,
+    Edit2
 } from 'lucide-react';
 
 interface ProjectDetailsProps {
@@ -23,19 +24,35 @@ interface ProjectDetailsProps {
 }
 
 const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, onNavigate, onOpenSettings }) => {
+    const [monthlyNotes, setMonthlyNotes] = useState<Record<string, string>>({});
+    const [isEditingNote, setIsEditingNote] = useState(false);
+    const [tempNote, setTempNote] = useState('');
+
+    useEffect(() => {
+        const savedNotes = localStorage.getItem('edilsmart_project_monthly_notes');
+        if (savedNotes) {
+            try { setMonthlyNotes(JSON.parse(savedNotes)); } catch (e) { }
+        }
+    }, [project.id]);
+
+    const currentDate = new Date();
+    const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+    const currentNoteKey = `${project.id}-${monthKey}`;
+    const currentNote = monthlyNotes[currentNoteKey] || '';
+
+    const handleSaveNote = () => {
+        const updated = { ...monthlyNotes, [currentNoteKey]: tempNote };
+        setMonthlyNotes(updated);
+        localStorage.setItem('edilsmart_project_monthly_notes', JSON.stringify(updated));
+        setIsEditingNote(false);
+    };
+
     const calculateTotalWithIVA = () => {
         if (!project.budget || !project.iva) return project.budget || 0;
         return project.budget + (project.budget * project.iva / 100);
     };
 
     const quickActions = [
-        {
-            id: 'computo',
-            label: 'Computo Metrico',
-            icon: Calculator,
-            color: 'emerald',
-            description: 'Gestisci le voci del computo'
-        },
         {
             id: 'cronoprogramma',
             label: 'Cronoprogramma',
@@ -169,24 +186,80 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, onNavigate, on
                 </div>
             </div>
 
-            {/* Progress */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-slate-800">Avanzamento Lavori</h3>
-                    <span className="text-2xl font-bold text-emerald-600">{project.progress || 0}%</span>
+            {/* Nota del Mese & Progress Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Nota del Mese Preview Box */}
+                <div className="bg-yellow-100 rounded-xl border border-yellow-200 shadow-sm flex flex-col h-full overflow-hidden">
+                    <div className="p-4 border-b border-yellow-200 bg-yellow-200/50 flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-amber-700">
+                            <StickyNote size={18} />
+                            <h3 className="font-bold text-sm uppercase tracking-wider">Nota del Mese</h3>
+                        </div>
+                        {!isEditingNote && (
+                            <button
+                                onClick={() => { setTempNote(currentNote); setIsEditingNote(true); }}
+                                className="text-xs font-bold text-amber-700 hover:text-amber-800 flex items-center gap-1 transition-colors bg-white/50 px-2 py-1 rounded"
+                            >
+                                <Edit2 size={12} />
+                                {currentNote ? 'Modifica' : 'Aggiungi'}
+                            </button>
+                        )}
+                        {isEditingNote && (
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setIsEditingNote(false)}
+                                    className="text-xs font-bold text-slate-500 hover:text-slate-600"
+                                >
+                                    Annulla
+                                </button>
+                                <button
+                                    onClick={handleSaveNote}
+                                    className="text-xs font-bold text-emerald-600 hover:text-emerald-700"
+                                >
+                                    Salva
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                    <div className="p-4 flex-1">
+                        {isEditingNote ? (
+                            <textarea
+                                className="w-full h-24 p-2 text-sm border border-yellow-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none resize-none bg-white"
+                                value={tempNote}
+                                onChange={(e) => setTempNote(e.target.value)}
+                                placeholder="Scrivi qui la nota del mese..."
+                                autoFocus
+                            />
+                        ) : (
+                            <div
+                                className={`text-sm leading-relaxed ${currentNote ? 'text-amber-900/80' : 'text-amber-600/50 italic'} h-24 overflow-y-auto pr-1 whitespace-pre-wrap font-medium`}
+                                style={{ scrollbarWidth: 'thin' }}
+                            >
+                                {currentNote || 'Nessuna nota inserita per questo mese. Clicca su aggiungi per scrivere un promemoria.'}
+                            </div>
+                        )}
+                    </div>
                 </div>
-                <div className="w-full bg-slate-100 rounded-full h-4 overflow-hidden">
-                    <div
-                        className="bg-gradient-to-r from-emerald-500 to-emerald-600 h-full rounded-full transition-all duration-500 shadow-inner"
-                        style={{ width: `${project.progress || 0}%` }}
-                    ></div>
+
+                {/* Progress Box */}
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 flex flex-col justify-center">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-bold text-slate-800">Avanzamento Lavori</h3>
+                        <span className="text-2xl font-bold text-emerald-600">{project.progress || 0}%</span>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-4 overflow-hidden" title={`${project.progress || 0}% completato`}>
+                        <div
+                            className="bg-gradient-to-r from-emerald-500 to-emerald-600 h-full rounded-full transition-all duration-500 shadow-inner"
+                            style={{ width: `${project.progress || 0}%` }}
+                        ></div>
+                    </div>
                 </div>
             </div>
 
             {/* Quick Actions */}
             <div>
                 <h3 className="text-lg font-bold text-slate-800 mb-4">Azioni Rapide</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {quickActions.map((action) => (
                         <button
                             key={action.id}

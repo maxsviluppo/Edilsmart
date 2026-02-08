@@ -81,8 +81,22 @@ export const importFromCSV = (
                     return;
                 }
 
+                // Detect separator
+                const firstLine = lines[0];
+                const separators = [',', ';', '\t'];
+                let separator = ',';
+                let maxCols = 0;
+
+                separators.forEach(s => {
+                    const cols = firstLine.split(s).length;
+                    if (cols > maxCols) {
+                        maxCols = cols;
+                        separator = s;
+                    }
+                });
+
                 // Parse header
-                const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+                const headers = firstLine.split(separator).map(h => h.trim().toLowerCase());
                 const codeIndex = headers.findIndex(h => h.includes('codice') || h.includes('code'));
                 const descIndex = headers.findIndex(h => h.includes('descrizione') || h.includes('description'));
                 const unitIndex = headers.findIndex(h => h.includes('unità') || h.includes('unit') || h.includes('um'));
@@ -90,7 +104,7 @@ export const importFromCSV = (
                 const categoryIndex = headers.findIndex(h => h.includes('categoria') || h.includes('category'));
 
                 if (codeIndex === -1 || descIndex === -1 || priceIndex === -1) {
-                    reject(new Error('Il file CSV deve contenere almeno: codice, descrizione e prezzo'));
+                    reject(new Error(`Il file CSV deve contenere almeno: codice, descrizione e prezzo. Trovate intestazioni: ${headers.join(', ')}`));
                     return;
                 }
 
@@ -98,11 +112,15 @@ export const importFromCSV = (
 
                 // Parse data rows
                 for (let i = 1; i < lines.length; i++) {
-                    const values = lines[i].split(',').map(v => v.trim());
+                    const values = lines[i].split(separator).map(v => v.trim().replace(/^"(.*)"$/, '$1')); // Remove quotes
 
-                    if (values.length < headers.length) continue;
+                    if (values.length < 2) continue; // Skip empty/malformed lines
 
-                    const price = parseFloat(values[priceIndex].replace(/[€\s]/g, '').replace(',', '.'));
+                    // Price parsing: handle Italian format like 1.250,50
+                    let priceStr = values[priceIndex] || '0';
+                    // Remove currency symbols, spaces, and thousand separator dots
+                    priceStr = priceStr.replace(/[€\s\.]/g, '').replace(',', '.');
+                    const price = parseFloat(priceStr);
 
                     if (isNaN(price)) continue;
 
@@ -178,13 +196,13 @@ export const searchPriceListItems = (
 
     if (filters?.region) {
         filtered = filtered.filter(item =>
-            item.region.toLowerCase() === filters.region!.toLowerCase()
+            item.region.toLowerCase().includes(filters.region!.toLowerCase())
         );
     }
 
     if (filters?.municipality) {
         filtered = filtered.filter(item =>
-            item.municipality?.toLowerCase() === filters.municipality!.toLowerCase()
+            item.municipality?.toLowerCase().includes(filters.municipality!.toLowerCase())
         );
     }
 

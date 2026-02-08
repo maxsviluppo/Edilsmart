@@ -99,25 +99,27 @@ const Payroll: React.FC<PayrollProps> = ({ projects }) => {
     const handleCellClick = (empId: string, day: number) => {
         const entry = getEntry(empId, day);
         setSelectedCell({ empId, day });
-        setEntryValue(entry?.amount?.toString() || '');
+        // Format with thousand separator for the input
+        const value = entry?.amount ? entry.amount.toLocaleString('it-IT') : '';
+        setEntryValue(value);
         setSelectedProject(entry?.projectId || '');
         setEntryNote(entry?.notes || '');
     };
 
-    const handleSaveEntry = () => {
-        if (!selectedCell) return;
+    const handleSaveEntry = (empId: string, day: number, value: string) => {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(selectedCell.day).padStart(2, '0')}`;
-        const amount = parseFloat(entryValue);
+        // Parse the Italian format (replace . with nothing and , with .)
+        const cleanValue = value.replace(/\./g, '').replace(/,/g, '.');
+        const amount = parseFloat(cleanValue);
 
         let updatedEntries = [...entries];
-        // Remove existing if any
-        updatedEntries = updatedEntries.filter(e => !(e.employeeId === selectedCell.empId && e.date === dateStr));
+        updatedEntries = updatedEntries.filter(e => !(e.employeeId === empId && e.date === dateStr));
 
         if (!isNaN(amount) && amount > 0) {
             updatedEntries.push({
                 id: Math.random().toString(36).substr(2, 9),
-                employeeId: selectedCell.empId,
+                employeeId: empId,
                 date: dateStr,
                 amount,
                 projectId: selectedProject || undefined,
@@ -127,6 +129,27 @@ const Payroll: React.FC<PayrollProps> = ({ projects }) => {
 
         saveEntries(updatedEntries);
         setSelectedCell(null);
+    };
+
+    const handleBlur = () => {
+        if (selectedCell) {
+            handleSaveEntry(selectedCell.empId, selectedCell.day, entryValue);
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            handleBlur();
+        } else if (e.key === 'Escape') {
+            setSelectedCell(null);
+        }
+    };
+
+    const formatInputValue = (val: string) => {
+        // Simple formatter for thousand separator as user types
+        const clean = val.replace(/\D/g, '');
+        if (!clean) return '';
+        return parseInt(clean).toLocaleString('it-IT');
     };
 
     const handleAddEmployee = (e: React.FormEvent) => {
@@ -286,12 +309,23 @@ const Payroll: React.FC<PayrollProps> = ({ projects }) => {
                                         key={day}
                                         onClick={() => handleCellClick(emp.id, day)}
                                         className={`
-                                    border-b border-r border-slate-100 text-center text-xs flex items-center justify-center cursor-pointer select-none
+                                    border-b border-r border-slate-100 text-center text-xs flex items-center justify-center cursor-pointer select-none h-10
                                     ${entry ? 'bg-blue-50 text-blue-700 font-medium' : 'hover:bg-slate-50'}
-                                    ${selectedCell?.empId === emp.id && selectedCell?.day === day ? 'ring-2 ring-blue-500 inset-0 z-20' : ''}
+                                    ${selectedCell?.empId === emp.id && selectedCell?.day === day ? 'ring-2 ring-blue-500 z-20 bg-white' : ''}
                                 `}
                                     >
-                                        {entry?.amount ? `€${entry.amount}` : ''}
+                                        {selectedCell?.empId === emp.id && selectedCell?.day === day ? (
+                                            <input
+                                                autoFocus
+                                                className="w-full h-full text-center outline-none bg-white font-bold text-blue-600"
+                                                value={entryValue}
+                                                onChange={(e) => setEntryValue(formatInputValue(e.target.value))}
+                                                onBlur={handleBlur}
+                                                onKeyDown={handleKeyDown}
+                                            />
+                                        ) : (
+                                            entry?.amount ? `€${entry.amount.toLocaleString('it-IT')}` : ''
+                                        )}
                                     </div>
                                 );
                             })}
@@ -429,76 +463,7 @@ const Payroll: React.FC<PayrollProps> = ({ projects }) => {
                     </div>
                 </div>
             </div>
-            {selectedCell && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
-                        <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
-                            <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                                <Users size={18} className="text-blue-600" />
-                                {employees.find(e => e.id === selectedCell.empId)?.name}
-                            </h3>
-                            <div className="text-sm font-medium text-slate-500">
-                                {selectedCell.day} {monthName}
-                            </div>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Importo (€)</label>
-                                <div className="relative">
-                                    <input
-                                        type="number"
-                                        autoFocus
-                                        className="w-full pl-8 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none text-lg font-bold"
-                                        placeholder="0.00"
-                                        value={entryValue}
-                                        onChange={e => setEntryValue(e.target.value)}
-                                    />
-                                    <Euro className="absolute left-3 top-4 text-slate-400" size={18} />
-                                </div>
-                            </div>
 
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Cantiere (Opzionale)</label>
-                                <select
-                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                                    value={selectedProject}
-                                    onChange={e => setSelectedProject(e.target.value)}
-                                >
-                                    <option value="">-- Nessun Cantiere --</option>
-                                    {projects.map(p => (
-                                        <option key={p.id} value={p.id}>{p.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Note</label>
-                                <textarea
-                                    className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none resize-none h-20 text-sm"
-                                    placeholder="Dettagli aggiuntivi..."
-                                    value={entryNote}
-                                    onChange={e => setEntryNote(e.target.value)}
-                                />
-                            </div>
-
-                            <div className="flex gap-2 pt-2">
-                                <button
-                                    onClick={handleSaveEntry}
-                                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-blue-200 transition-all"
-                                >
-                                    Salva
-                                </button>
-                                <button
-                                    onClick={() => setSelectedCell(null)}
-                                    className="px-4 py-3 border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50"
-                                >
-                                    Annulla
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* Add Employee Modal */}
             {isAddingEmployee && (
