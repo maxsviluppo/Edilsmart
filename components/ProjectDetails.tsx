@@ -16,7 +16,9 @@ import {
     StickyNote,
     Edit2,
     DollarSign,
-    Package
+    Package,
+    Trash2,
+    Plus
 } from 'lucide-react';
 
 interface ProjectDetailsProps {
@@ -49,7 +51,18 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, onNavigate, on
 
     // Material State
     const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
-    const [newMaterial, setNewMaterial] = useState({ amount: '', description: '', date: new Date().toISOString().split('T')[0], supplier: '' });
+    const [newMaterial, setNewMaterial] = useState({
+        amount: '',
+        description: '',
+        date: new Date().toISOString().split('T')[0],
+        supplier: '',
+        paymentMethod: 'Bonifico'
+    });
+
+    // Filter State
+    const [dateFilter, setDateFilter] = useState('all');
+
+    const [editingId, setEditingId] = useState<string | null>(null);
 
     const handleSaveNote = () => {
         const updated = { ...monthlyNotes, [currentNoteKey]: tempNote };
@@ -63,30 +76,38 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, onNavigate, on
         if (!newAcconto.amount || !onUpdateProject) return;
 
         const amount = parseFloat(newAcconto.amount);
-        const transaction = {
-            id: Math.random().toString(36).substr(2, 9),
-            date: newAcconto.date,
-            description: `Acconto Cantiere: ${newAcconto.description || 'Nessuna descrizione'}`,
-            amount: amount, // Positive for Revenue
-            category: 'Ricavi',
-            status: 'Pagato' as const,
-            projectId: project.id
-        };
 
-        const updatedExpenses = [...(project.expenses || []), transaction];
+        // Handle Edit or Create
+        if (editingId) {
+            const updatedExpenses = (project.expenses || []).map(exp => {
+                if (exp.id === editingId) {
+                    return {
+                        ...exp,
+                        date: newAcconto.date,
+                        description: `Acconto Cantiere: ${newAcconto.description || 'Nessuna descrizione'}`,
+                        amount: amount,
+                    };
+                }
+                return exp;
+            });
 
-        // Update project revenue as well
-        const currentRevenue = project.revenue || project.budget || 0;
-        const updatedRevenue = currentRevenue; // Usually revenue is budget, but here we are tracking payments received? 
-        // User said: "sottrarre o aggiungere i costi... mettili come ricavi"
-        // It seems they want to track payments received from client as "Ricavi".
-
-        onUpdateProject({
-            ...project,
-            expenses: updatedExpenses
-        });
+            onUpdateProject({ ...project, expenses: updatedExpenses });
+        } else {
+            const transaction = {
+                id: Math.random().toString(36).substr(2, 9),
+                date: newAcconto.date,
+                description: `Acconto Cantiere: ${newAcconto.description || 'Nessuna descrizione'}`,
+                amount: amount, // Positive for Revenue
+                category: 'Ricavi',
+                status: 'Pagato' as const,
+                projectId: project.id
+            };
+            const updatedExpenses = [...(project.expenses || []), transaction];
+            onUpdateProject({ ...project, expenses: updatedExpenses });
+        }
 
         setIsAccontoModalOpen(false);
+        setEditingId(null);
         setNewAcconto({ amount: '', description: '', date: new Date().toISOString().split('T')[0] });
     };
 
@@ -95,33 +116,142 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, onNavigate, on
         if (!newMaterial.amount || !onUpdateProject) return;
 
         const amount = parseFloat(newMaterial.amount);
-        const transaction = {
-            id: Math.random().toString(36).substr(2, 9),
-            date: newMaterial.date,
-            description: `Materiale: ${newMaterial.description || 'Nessuna descrizione'} ${newMaterial.supplier ? `(${newMaterial.supplier})` : ''}`,
-            amount: -amount, // Negative for Expense
-            category: 'Materiali',
-            status: 'Pagato' as const,
-            projectId: project.id,
-            paymentType: 'Bonifico' as const // Default assumption
-        };
+        const desc = `Materiale: ${newMaterial.description || 'Nessuna descrizione'} ${newMaterial.supplier ? `(${newMaterial.supplier})` : ''}`;
 
-        const updatedExpenses = [...(project.expenses || []), transaction];
+        if (editingId) {
+            const updatedExpenses = (project.expenses || []).map(exp => {
+                if (exp.id === editingId) {
+                    const oldAmount = Math.abs(exp.amount);
+                    return {
+                        ...exp,
+                        date: newMaterial.date,
+                        description: desc,
+                        amount: -amount,
+                        paymentType: (newMaterial.paymentMethod as any) || 'Bonifico'
+                    };
+                }
+                return exp;
+            });
+
+            // Recalculate total if needed, but simple replacement is safer for now.
+            // But we need to update totalExpenses on project if we want consistency?
+            // Simplified: Re-sum all expenses
+            const newTotalExpenses = updatedExpenses
+                .filter(e => e.amount < 0)
+                .reduce((sum, e) => sum + Math.abs(e.amount), 0);
+
+            onUpdateProject({ ...project, expenses: updatedExpenses, totalExpenses: newTotalExpenses });
+
+        } else {
+            const transaction = {
+                id: Math.random().toString(36).substr(2, 9),
+                date: newMaterial.date,
+                description: desc,
+                amount: -amount, // Negative for Expense
+                category: 'Materiali',
+                status: 'Pagato' as const,
+                projectId: project.id,
+                paymentType: (newMaterial.paymentMethod as any) || 'Bonifico'
+            };
+
+            const updatedExpenses = [...(project.expenses || []), transaction];
+            onUpdateProject({
+                ...project,
+                expenses: updatedExpenses,
+                totalExpenses: (project.totalExpenses || 0) + amount
+            });
+        }
+
+        setIsMaterialModalOpen(false);
+        setEditingId(null);
+        setNewMaterial({
+            amount: '',
+            description: '',
+            date: new Date().toISOString().split('T')[0],
+            supplier: '',
+            paymentMethod: 'Bonifico'
+        });
+    };
+
+    const handleEditTransaction = (t: any) => {
+        setEditingId(t.id);
+        if (t.category === 'Ricavi') {
+            setNewAcconto({
+                amount: Math.abs(t.amount).toString(),
+                description: t.description.replace('Acconto Cantiere: ', ''),
+                date: t.date
+            });
+            setIsAccontoModalOpen(true);
+        } else {
+            // Assume Material/Expense
+            // Extract supplier from description if possible
+            const matchSupplier = t.description.match(/\s\(([^)]+)\)$/);
+            let rawDesc = t.description.replace(/^Materiale: /, '');
+            let supplier = '';
+            if (matchSupplier) {
+                supplier = matchSupplier[1];
+                rawDesc = rawDesc.replace(matchSupplier[0], '');
+            }
+
+            setNewMaterial({
+                amount: Math.abs(t.amount).toString(),
+                description: rawDesc,
+                date: t.date,
+                supplier: supplier,
+                paymentMethod: t.paymentType || 'Bonifico'
+            });
+            setIsMaterialModalOpen(true);
+        }
+    };
+
+    const handleDeleteTransaction = (id: string) => {
+        if (!confirm('Sei sicuro di voler eliminare questa registrazione?')) return;
+        if (!onUpdateProject) return;
+
+        const exp = project.expenses?.find(e => e.id === id);
+        const amountAbs = exp ? Math.abs(exp.amount) : 0;
+        const isExpense = exp && exp.amount < 0;
+
+        const updatedExpenses = (project.expenses || []).filter(e => e.id !== id);
 
         onUpdateProject({
             ...project,
             expenses: updatedExpenses,
-            totalExpenses: (project.totalExpenses || 0) + amount
+            totalExpenses: isExpense ? (project.totalExpenses || 0) - amountAbs : (project.totalExpenses || 0)
         });
-
-        setIsMaterialModalOpen(false);
-        setNewMaterial({ amount: '', description: '', date: new Date().toISOString().split('T')[0], supplier: '' });
     };
 
     const calculateTotalWithIVA = () => {
         if (!project.budget || !project.iva) return project.budget || 0;
         return project.budget + (project.budget * project.iva / 100);
     };
+
+    const totalRevenue = (project.expenses || [])
+        .filter(t => t.amount > 0)
+        .reduce((sum, t) => sum + t.amount, 0);
+
+    const totalWithIVA = calculateTotalWithIVA();
+    const remainingBalance = totalWithIVA - totalRevenue;
+
+    const filteredTransactions = (project.expenses || [])
+        .filter(t => t.amount > 0)
+        .filter(t => {
+            if (dateFilter === 'all') return true;
+            const txDate = new Date(t.date);
+            const now = new Date();
+            if (dateFilter === 'thisMonth') {
+                return txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear();
+            }
+            if (dateFilter === 'lastMonth') {
+                const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                return txDate.getMonth() === lastMonth.getMonth() && txDate.getFullYear() === lastMonth.getFullYear();
+            }
+            if (dateFilter === 'thisYear') {
+                return txDate.getFullYear() === now.getFullYear();
+            }
+            return true;
+        })
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     const quickActions = [
         {
@@ -223,56 +353,54 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, onNavigate, on
             </div>
 
             {/* Financial Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 relative group hover:shadow-md transition-all">
                     <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2 text-slate-500 text-sm">
                             <Euro size={16} />
                             <span className="font-semibold">Totale Preventivo</span>
                         </div>
-                        <div className="flex gap-1">
-                            <button
-                                onClick={() => setIsMaterialModalOpen(true)}
-                                className="bg-blue-50 text-blue-600 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-100"
-                                title="Registra Materiale"
-                            >
-                                <Package size={18} />
-                            </button>
-                            <button
-                                onClick={() => setIsAccontoModalOpen(true)}
-                                className="bg-emerald-50 text-emerald-600 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-emerald-100"
-                                title="Registra Acconto"
-                            >
-                                <DollarSign size={18} />
-                            </button>
-                        </div>
                     </div>
-                    <p className="text-3xl font-bold text-slate-800">
+                    <p className="text-2xl font-bold text-slate-800">
                         € {project.budget?.toLocaleString('it-IT', { minimumFractionDigits: 2 }) || '0.00'}
                     </p>
-                    <div className="mt-2 text-xs text-slate-400 flex justify-between items-center">
-                        <span>Gestisci acconti e materiali</span>
+                    <div className="mt-1 text-xs text-slate-400">
+                        + IVA {project.iva}%: € {((project.budget || 0) * (project.iva || 0) / 100).toLocaleString('it-IT', { minimumFractionDigits: 2 })}
                     </div>
                 </div>
 
-                {project.iva !== undefined && (
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-2">
-                            <FileText size={16} />
-                            <span className="font-semibold">IVA ({project.iva}%)</span>
-                        </div>
-                        <p className="text-3xl font-bold text-slate-800">
-                            € {((project.budget || 0) * project.iva / 100).toLocaleString('it-IT', { minimumFractionDigits: 2 })}
-                        </p>
+                <div className="bg-emerald-50 rounded-xl border border-emerald-100 shadow-sm p-6">
+                    <div className="flex items-center gap-2 text-emerald-600 text-sm mb-2">
+                        <TrendingUp size={16} />
+                        <span className="font-semibold">Totale Acconti</span>
                     </div>
-                )}
+                    <p className="text-2xl font-bold text-emerald-700">
+                        € {totalRevenue.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                    </p>
+                    <div className="mt-1 text-xs text-emerald-500">
+                        Incassato finora
+                    </div>
+                </div>
 
-                <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl shadow-lg p-6 text-white">
-                    <div className="flex items-center gap-2 text-emerald-100 text-sm mb-2">
+                <div className={`rounded-xl border shadow-sm p-6 ${remainingBalance > 0 ? 'bg-amber-50 border-amber-100' : 'bg-slate-50 border-slate-100'}`}>
+                    <div className={`flex items-center gap-2 text-sm mb-2 ${remainingBalance > 0 ? 'text-amber-600' : 'text-slate-500'}`}>
+                        <Clock size={16} />
+                        <span className="font-semibold">Residuo da Incassare</span>
+                    </div>
+                    <p className={`text-2xl font-bold ${remainingBalance > 0 ? 'text-amber-700' : 'text-slate-700'}`}>
+                        € {Math.max(0, remainingBalance).toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                    </p>
+                    <div className={`mt-1 text-xs ${remainingBalance > 0 ? 'text-amber-500' : 'text-slate-400'}`}>
+                        su Totale IVA Inclusa
+                    </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-slate-700 to-slate-800 rounded-xl shadow-lg p-6 text-white">
+                    <div className="flex items-center gap-2 text-slate-300 text-sm mb-2">
                         <Euro size={16} />
                         <span className="font-semibold">Totale IVA Inclusa</span>
                     </div>
-                    <p className="text-3xl font-bold">
+                    <p className="text-2xl font-bold">
                         € {calculateTotalWithIVA().toLocaleString('it-IT', { minimumFractionDigits: 2 })}
                     </p>
                 </div>
@@ -348,6 +476,104 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, onNavigate, on
                 </div>
             </div>
 
+            {/* Transaction List Section */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col">
+                <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h3 className="text-xl font-bold text-slate-800">Registrazioni e Movimenti</h3>
+                        <p className="text-sm text-slate-500">Storico completo di spese e incassi</p>
+                    </div>
+                    <div className="flex flex-col md:flex-row md:items-center gap-4">
+                        <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-lg border border-slate-200">
+                            <button
+                                onClick={() => setDateFilter('all')}
+                                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${dateFilter === 'all' ? 'bg-white text-blue-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                Tutto
+                            </button>
+                            <button
+                                onClick={() => setDateFilter('thisMonth')}
+                                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${dateFilter === 'thisMonth' ? 'bg-white text-blue-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                Mese Corrente
+                            </button>
+                            <button
+                                onClick={() => setDateFilter('thisYear')}
+                                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${dateFilter === 'thisYear' ? 'bg-white text-blue-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                Anno Corrente
+                            </button>
+                        </div>
+                        <button
+                            onClick={() => { setEditingId(null); setIsAccontoModalOpen(true); }}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-bold flex items-center shadow-sm transition-colors"
+                        >
+                            <Plus size={16} className="mr-1.5" />
+                            Incasso
+                        </button>
+                    </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                        <thead className="bg-slate-50 text-slate-500 font-medium">
+                            <tr>
+                                <th className="px-6 py-3 whitespace-nowrap">Data</th>
+                                <th className="px-6 py-3">Descrizione</th>
+                                <th className="px-6 py-3">Categoria</th>
+                                <th className="px-6 py-3 text-right">Importo</th>
+                                <th className="px-6 py-3 text-center">Azioni</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {filteredTransactions.length > 0 ? (
+                                filteredTransactions
+                                    .map((t) => (
+                                        <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
+                                            <td className="px-6 py-4 text-slate-600 font-mono text-xs whitespace-nowrap">{t.date}</td>
+                                            <td className="px-6 py-4 font-medium text-slate-800">
+                                                {t.description}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className="inline-flex px-2 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
+                                                    {t.category || 'Entrata'}
+                                                </span>
+                                            </td>
+                                            <td className={`px-6 py-4 text-right font-bold ${t.amount > 0 ? 'text-emerald-600' : 'text-slate-700'}`}>
+                                                {t.amount > 0 ? '+' : ''} € {Math.abs(t.amount).toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="px-6 py-4 text-center">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <button
+                                                        onClick={() => handleEditTransaction(t)}
+                                                        className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                                        title="Modifica"
+                                                    >
+                                                        <Edit2 size={16} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteTransaction(t.id)}
+                                                        className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                        title="Elimina"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                            ) : (
+                                <tr>
+                                    <td colSpan={5} className="px-6 py-12 text-center text-slate-400 italic">
+                                        Nessun incasso registrato per questo cantiere.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             {/* Quick Actions */}
             <div>
                 <h3 className="text-lg font-bold text-slate-800 mb-4">Azioni Rapide</h3>
@@ -377,7 +603,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, onNavigate, on
                         <div className="p-6 border-b flex justify-between items-center bg-emerald-50">
                             <h3 className="text-lg font-bold text-slate-800 flex items-center">
                                 <DollarSign className="mr-2 text-emerald-600" size={20} />
-                                Registra Acconto
+                                {editingId ? 'Modifica Acconto' : 'Registra Acconto'}
                             </h3>
                             <button
                                 onClick={() => setIsAccontoModalOpen(false)}
@@ -445,7 +671,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, onNavigate, on
                                     type="submit"
                                     className="flex-1 px-4 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-all active:scale-95"
                                 >
-                                    Registra Incasso
+                                    {editingId ? 'Salva Modifiche' : 'Registra Incasso'}
                                 </button>
                             </div>
                         </form>
@@ -459,7 +685,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, onNavigate, on
                         <div className="p-6 border-b flex justify-between items-center bg-blue-50">
                             <h3 className="text-lg font-bold text-slate-800 flex items-center">
                                 <Package className="mr-2 text-blue-600" size={20} />
-                                Registra Acquisto Materiale
+                                {editingId ? 'Modifica Spesa' : 'Registra Acquisto Materiale'}
                             </h3>
                             <button
                                 onClick={() => setIsMaterialModalOpen(false)}
@@ -496,6 +722,20 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, onNavigate, on
                                     />
                                     <Euro className="absolute left-2.5 top-2.5 text-slate-400" size={14} />
                                 </div>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-bold text-slate-500 uppercase">Metodo di Pagamento</label>
+                                <select
+                                    className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                                    value={newMaterial.paymentMethod}
+                                    onChange={(e) => setNewMaterial({ ...newMaterial, paymentMethod: e.target.value })}
+                                >
+                                    <option value="Bonifico">Bonifico</option>
+                                    <option value="Carta di Credito">Carta di Credito</option>
+                                    <option value="Contanti">Contanti</option>
+                                    <option value="Assegno">Assegno</option>
+                                    <option value="RiBa">RiBa</option>
+                                </select>
                             </div>
                             <div className="space-y-1">
                                 <label className="text-xs font-bold text-slate-500 uppercase">Fornitore (Opzionale)</label>
@@ -538,7 +778,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, onNavigate, on
                                     type="submit"
                                     className="flex-1 px-4 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all active:scale-95"
                                 >
-                                    Registra Spesa
+                                    {editingId ? 'Salva Modifiche' : 'Registra Spesa'}
                                 </button>
                             </div>
                         </form>

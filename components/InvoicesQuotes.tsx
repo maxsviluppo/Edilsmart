@@ -435,14 +435,14 @@ const InvoicesQuotes: React.FC<InvoicesQuotesProps> = ({ projects, initialTab, i
                     <table className="w-full">
                         <thead className="bg-slate-50 border-b border-slate-200">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Numero</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Tipo</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Cliente/Fornitore</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Data</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Scadenza</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Importo</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Stato</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Azioni</th>
+                                <th className="px-6 py-4 text-left text-sm font-bold text-slate-700 uppercase tracking-wider w-32">Numero</th>
+                                <th className="px-6 py-4 text-left text-sm font-bold text-slate-700 uppercase tracking-wider w-32">Tipo</th>
+                                <th className="px-6 py-4 text-left text-sm font-bold text-slate-700 uppercase tracking-wider min-w-[250px]">Cliente/Fornitore</th>
+                                <th className="px-6 py-4 text-left text-sm font-bold text-slate-700 uppercase tracking-wider w-36">Data</th>
+                                <th className="px-6 py-4 text-left text-sm font-bold text-slate-700 uppercase tracking-wider w-36">Scadenza</th>
+                                <th className="px-6 py-4 text-right text-sm font-bold text-slate-700 uppercase tracking-wider w-40">Importo</th>
+                                <th className="px-6 py-4 text-center text-sm font-bold text-slate-700 uppercase tracking-wider w-36">Stato</th>
+                                <th className="px-6 py-4 text-center text-sm font-bold text-slate-700 uppercase tracking-wider w-40">Azioni</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200">
@@ -450,65 +450,69 @@ const InvoicesQuotes: React.FC<InvoicesQuotesProps> = ({ projects, initialTab, i
                                 <tr key={invoice.id} className="hover:bg-slate-50 transition-colors">
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-2">
-                                            <span className="font-semibold text-slate-900">{invoice.number}</span>
+                                            <span className="font-bold text-slate-900 text-base">{invoice.number}</span>
                                             {invoice.linkedToComputo && (
                                                 <span title="Collegata al computo">
-                                                    <Link2 size={14} className="text-emerald-600" />
+                                                    <Link2 size={16} className="text-emerald-600" />
                                                 </span>
                                             )}
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 rounded-md text-xs font-medium ${invoice.type === 'emessa'
-                                            ? 'bg-emerald-100 text-emerald-700'
-                                            : 'bg-blue-100 text-blue-700'
+                                        <span className={`px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wide ${invoice.type === 'emessa'
+                                            ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                            : 'bg-blue-100 text-blue-700 border border-blue-200'
                                             }`}>
                                             {invoice.type === 'emessa' ? 'Emessa' : 'Ricevuta'}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2">
-                                            {invoice.type === 'emessa' ? <User size={14} className="text-slate-400" /> : <Building2 size={14} className="text-slate-400" />}
-                                            <span className="text-slate-900">{invoice.clientName || 'Sconosciuto'}</span>
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-2 rounded-full ${invoice.type === 'emessa' ? 'bg-slate-100' : 'bg-blue-50'}`}>
+                                                {invoice.type === 'emessa' ? <User size={18} className="text-slate-500" /> : <Building2 size={18} className="text-blue-500" />}
+                                            </div>
+                                            <span className="text-slate-900 font-medium text-base truncate max-w-[200px]" title={invoice.clientName || 'Sconosciuto'}>
+                                                {invoice.clientName || 'Sconosciuto'}
+                                            </span>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 text-slate-600">
+                                    <td className="px-6 py-4 text-slate-600 font-medium whitespace-nowrap">
                                         {new Date(invoice.date).toLocaleDateString('it-IT')}
                                     </td>
-                                    <td className="px-6 py-4 text-slate-600">
+                                    <td className="px-6 py-4 text-slate-600 font-medium whitespace-nowrap">
                                         {invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString('it-IT') : '-'}
                                     </td>
-                                    <td className="px-6 py-4">
-                                        <span className="font-semibold text-slate-900">€ {(invoice.totalAmount || 0).toLocaleString()}</span>
+                                    <td className="px-6 py-4 text-right">
+                                        <span className="font-bold text-slate-900 text-base">€ {(invoice.totalAmount || 0).toLocaleString('it-IT', { minimumFractionDigits: 2 })}</span>
                                     </td>
-                                    <td className="px-6 py-4">
-                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${getStatusColor(invoice.status)}`}>
+                                    <td className="px-6 py-4 text-center">
+                                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase border ${getStatusColor(invoice.status)}`}>
                                             {getStatusIcon(invoice.status)}
                                             {invoice.status}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2">
+                                    <td className="px-6 py-4 text-center">
+                                        <div className="flex items-center justify-center gap-1">
                                             <button
                                                 onClick={() => handleEditInvoice(invoice)}
-                                                className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-blue-600 transition-colors"
+                                                className="p-2 hover:bg-blue-50 rounded-lg text-slate-400 hover:text-blue-600 transition-colors"
                                                 title="Modifica"
                                             >
-                                                <Edit2 size={16} />
+                                                <Edit2 size={18} />
                                             </button>
                                             <button
                                                 onClick={() => handleDeleteInvoice(invoice.id)}
-                                                className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-red-600 transition-colors"
+                                                className="p-2 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600 transition-colors"
                                                 title="Elimina"
                                             >
-                                                <Trash2 size={16} />
+                                                <Trash2 size={18} />
                                             </button>
-                                            <button className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-emerald-600 transition-colors" title="Download PDF">
-                                                <Download size={16} />
+                                            <button className="p-2 hover:bg-emerald-50 rounded-lg text-slate-400 hover:text-emerald-600 transition-colors" title="Download PDF">
+                                                <Download size={18} />
                                             </button>
                                             {invoice.type === 'emessa' && invoice.status !== 'Pagata' && (
-                                                <button className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-blue-600 transition-colors" title="Invia">
-                                                    <Send size={16} />
+                                                <button className="p-2 hover:bg-purple-50 rounded-lg text-slate-400 hover:text-purple-600 transition-colors" title="Invia">
+                                                    <Send size={18} />
                                                 </button>
                                             )}
                                         </div>

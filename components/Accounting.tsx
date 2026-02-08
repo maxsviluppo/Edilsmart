@@ -24,9 +24,13 @@ import {
   ChevronRight,
   Printer,
   Building2,
+
+  User,
   Phone,
   Mail,
-  User
+  ChevronDown,
+  CheckCircle,
+  Clock
 } from 'lucide-react';
 import { Expense, Supplier, Invoice, Project, PayrollEntry, Employee } from '../types';
 import { addInvoice, deleteInvoice as deleteInvoiceSvc, loadInvoices } from '../services/invoiceService';
@@ -219,6 +223,13 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
   });
 
   const [deletingTransactionId, setDeletingTransactionId] = useState<string | null>(null);
+  const [statusMenuOpen, setStatusMenuOpen] = useState<string | null>(null);
+
+  const handleStatusChange = (id: string, newStatus: 'Pagato' | 'In Attesa') => {
+    setTransactions(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t));
+    setStatusMenuOpen(null);
+    setToast({ message: `Stato aggiornato a ${newStatus}`, type: 'success' });
+  };
 
   const getCategoryStyle = (cat: string) => {
     switch (cat) {
@@ -463,18 +474,34 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
     document.body.removeChild(link);
   };
 
-  const totalIncome = filteredTransactions.reduce((acc, t) => {
-    if (t.category === 'Ricavi') return acc + Math.abs(t.amount);
-    if (t.amount > 0) return acc + t.amount;
-    return acc;
-  }, 0);
+  const stats = useMemo(() => {
+    let incomePaid = 0;
+    let incomePending = 0;
+    let expensesPaid = 0;
+    let expensesPending = 0;
 
-  const totalExpenses = Math.abs(filteredTransactions.reduce((acc, t) => {
-    if (t.category !== 'Ricavi' && t.amount < 0) return acc + t.amount;
-    return acc;
-  }, 0));
+    filteredTransactions.forEach(t => {
+      const isIncome = t.category === 'Ricavi' || t.amount > 0;
+      const absAmount = Math.abs(t.amount);
+      const isPaid = t.status === 'Pagato';
 
-  const netBalance = totalIncome - totalExpenses;
+      if (isIncome) {
+        if (isPaid) incomePaid += absAmount;
+        else incomePending += absAmount;
+      } else {
+        if (isPaid) expensesPaid += absAmount;
+        else expensesPending += absAmount;
+      }
+    });
+
+    return {
+      incomePaid,
+      incomePending,
+      expensesPaid,
+      expensesPending,
+      netBalance: incomePaid - expensesPaid
+    };
+  }, [filteredTransactions]);
 
   return (
     <div className="space-y-6">
@@ -553,24 +580,41 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-6 rounded-xl border-l-4 border-l-emerald-500 shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-slate-500 text-sm font-medium">Entrate filtrate</span>
+                <span className="text-slate-500 text-sm font-medium">Entrate Incassate</span>
                 <Wallet className="text-emerald-500" size={20} />
               </div>
-              <h4 className="text-2xl font-bold text-slate-900">€ {totalIncome.toLocaleString('it-IT', { minimumFractionDigits: 2 })}</h4>
+              <h4 className="text-2xl font-bold text-slate-900">€ {stats.incomePaid.toLocaleString('it-IT', { minimumFractionDigits: 2 })}</h4>
+              {stats.incomePending > 0 && (
+                <div className="text-xs text-amber-600 mt-1 flex items-center">
+                  <Clock size={12} className="mr-1" />
+                  In attesa: € {stats.incomePending.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                </div>
+              )}
             </div>
             <div className="bg-white p-6 rounded-xl border-l-4 border-l-rose-500 shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-slate-500 text-sm font-medium">Uscite filtrate</span>
+                <span className="text-slate-500 text-sm font-medium">Uscite Pagate</span>
                 <ShoppingCart className="text-rose-500" size={20} />
               </div>
-              <h4 className="text-2xl font-bold text-slate-900">€ {totalExpenses.toLocaleString('it-IT', { minimumFractionDigits: 2 })}</h4>
+              <h4 className="text-2xl font-bold text-slate-900">€ {stats.expensesPaid.toLocaleString('it-IT', { minimumFractionDigits: 2 })}</h4>
+              {stats.expensesPending > 0 && (
+                <div className="text-xs text-amber-600 mt-1 flex items-center">
+                  <Clock size={12} className="mr-1" />
+                  In attesa: € {stats.expensesPending.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                </div>
+              )}
             </div>
             <div className="bg-white p-6 rounded-xl border-l-4 border-l-blue-500 shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-slate-500 text-sm font-medium">Bilancio Netto</span>
+                <span className="text-slate-500 text-sm font-medium">Bilancio Netto (Cassa)</span>
                 <CreditCard className="text-blue-500" size={20} />
               </div>
-              <h4 className="text-2xl font-bold text-slate-900">€ {netBalance.toLocaleString('it-IT', { minimumFractionDigits: 2 })}</h4>
+              <h4 className={`text-2xl font-bold ${stats.netBalance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                € {stats.netBalance.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+              </h4>
+              <div className="text-xs text-slate-400 mt-1">
+                Calcolato su movimenti pagati
+              </div>
             </div>
           </div>
 
@@ -740,10 +784,67 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
                             </span>
                           </td>
                           <td className="px-6 py-4">
-                            <span className={`flex items-center text-xs font-medium ${t.status === 'Pagato' ? 'text-emerald-600' : 'text-amber-600'}`}>
-                              <div className={`w-1.5 h-1.5 rounded-full mr-2 ${t.status === 'Pagato' ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
-                              {t.status}
-                            </span>
+                            <div className="relative">
+                              {!t.id.startsWith('payroll_') ? (
+                                <>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setStatusMenuOpen(statusMenuOpen === t.id ? null : t.id);
+                                    }}
+                                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-bold border transition-all hover:scale-105 active:scale-95 ${t.status === 'Pagato'
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                      : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                                      }`}
+                                  >
+                                    {t.status === 'Pagato' ? <CheckCircle size={14} /> : <Clock size={14} />}
+                                    {t.status}
+                                    <ChevronDown size={14} className={`transition-transform duration-200 ${statusMenuOpen === t.id ? 'rotate-180' : ''}`} />
+                                  </button>
+
+                                  {statusMenuOpen === t.id && (
+                                    <>
+                                      <div
+                                        className="fixed inset-0 z-10"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setStatusMenuOpen(null);
+                                        }}
+                                      />
+                                      <div className="absolute top-full left-0 mt-2 w-40 bg-white rounded-xl shadow-xl border border-slate-100 z-20 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                                        <div className="p-1">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleStatusChange(t.id, 'Pagato');
+                                            }}
+                                            className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                                          >
+                                            <CheckCircle size={16} />
+                                            Pagato
+                                          </button>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleStatusChange(t.id, 'In Attesa');
+                                            }}
+                                            className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 rounded-lg transition-colors"
+                                          >
+                                            <Clock size={16} />
+                                            In Attesa
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </>
+                                  )}
+                                </>
+                              ) : (
+                                <span className={`flex items-center text-xs font-medium ${t.status === 'Pagato' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                  <div className={`w-1.5 h-1.5 rounded-full mr-2 ${t.status === 'Pagato' ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
+                                  {t.status}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className={`px-6 py-4 text-right font-bold ${(t.amount > 0 || t.category === 'Ricavi') ? 'text-emerald-600' : 'text-slate-900'} ${isEditing ? 'text-blue-900' : ''}`}>
                             {(t.amount > 0 || t.category === 'Ricavi') ? '+' : ''}
