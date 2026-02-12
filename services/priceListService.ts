@@ -116,12 +116,28 @@ export const importFromCSV = (
 
                     if (values.length < 2) continue; // Skip empty/malformed lines
 
-                    // Price parsing: handle Italian format like 1.250,50
+                    // Price parsing: handle diverse formats: 1.250,50 or 1250.50 or 1250,50
                     let priceStr = values[priceIndex] || '0';
-                    // Remove currency symbols, spaces, and thousand separator dots
-                    priceStr = priceStr.replace(/[€\s\.]/g, '').replace(',', '.');
-                    const price = parseFloat(priceStr);
 
+                    // Remove currency symbols and spaces
+                    priceStr = priceStr.replace(/[€$£\s]/g, '');
+
+                    // Heuristic to detect format: if there's both a dot and a comma, the last one is the decimal separator.
+                    // If there's only one of them, we check its position.
+                    const lastDot = priceStr.lastIndexOf('.');
+                    const lastComma = priceStr.lastIndexOf(',');
+
+                    if (lastComma > lastDot) {
+                        // Likely European format: 1.234,56 or 1234,56
+                        priceStr = priceStr.replace(/\./g, '').replace(',', '.');
+                    } else if (lastDot > lastComma) {
+                        // Likely US format: 1,234.56 or 1234.56
+                        priceStr = priceStr.replace(/,/g, '');
+                    } else {
+                        // No separators or something else
+                    }
+
+                    const price = parseFloat(priceStr);
                     if (isNaN(price)) continue;
 
                     items.push({

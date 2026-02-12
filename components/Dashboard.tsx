@@ -14,6 +14,7 @@ import {
 } from 'recharts';
 import { TrendingUp, TrendingDown, Clock, CheckCircle } from 'lucide-react';
 import { Project } from '../types';
+import { formatNumber, formatChartValue, formatCurrency } from '../services/formatUtils';
 
 interface DashboardProps {
   projects: Project[];
@@ -49,8 +50,8 @@ const Dashboard: React.FC<DashboardProps> = ({ projects }) => {
   const stats = useMemo(() => {
     const totalBudget = projects.reduce((sum, p) => sum + (p.budget || 0), 0);
     const totalExpenses = projects.reduce((sum, p) => sum + (p.totalExpenses || 0), 0);
-    const activeProjects = projects.filter(p => p.status === 'in-progress').length;
-    const completedProjects = projects.filter(p => p.status === 'completed').length;
+    const activeProjects = projects.filter(p => p.status === 'In Corso').length;
+    const completedProjects = projects.filter(p => p.status === 'Completato').length;
 
     return {
       totalBudget,
@@ -64,7 +65,6 @@ const Dashboard: React.FC<DashboardProps> = ({ projects }) => {
     return projects.slice(0, 6).map(project => ({
       name: project.name.length > 15 ? project.name.substring(0, 15) + '...' : project.name,
       budget: project.budget || 0,
-      speso: project.totalExpenses || 0
     }));
   }, [projects]);
 
@@ -80,15 +80,9 @@ const Dashboard: React.FC<DashboardProps> = ({ projects }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Budget Totale"
-          value={`€ ${(stats.totalBudget / 1000).toFixed(0)}k`}
+          value={formatCurrency(stats.totalBudget)}
           icon={TrendingUp}
           color="blue"
-        />
-        <StatCard
-          title="Spese Totali"
-          value={`€ ${(stats.totalExpenses / 1000).toFixed(0)}k`}
-          icon={TrendingDown}
-          color="rose"
         />
         <StatCard
           title="Cantieri Attivi"
@@ -113,10 +107,9 @@ const Dashboard: React.FC<DashboardProps> = ({ projects }) => {
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `€${val / 1000}k`} />
+                <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `€${formatChartValue(val)}`} />
                 <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                <Bar dataKey="budget" fill="#e2e8f0" radius={[4, 4, 0, 0]} name="Budget Previsto" />
-                <Bar dataKey="speso" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Spesa Reale" />
+                <Bar dataKey="budget" fill="#3b82f6" radius={[0, 4, 4, 0]} name="Budget" />
               </BarChart>
             </ResponsiveContainer>
           </div>

@@ -1,6 +1,6 @@
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { PriceListItem, PriceList } from "../types";
+import { PriceListItem, Expense } from "../types";
 
 // Questa dovrebbe essere configurabile nelle impostazioni dell'app
 const getApiKey = () => localStorage.getItem('edilsmart_gemini_api_key') || '';
@@ -79,7 +79,12 @@ export const semanticSearch = async (
 
     } catch (error) {
         console.error("Errore AI Search:", error);
-        return [];
+        // Fallback: ricerca parole chiave semplice
+        const terms = query.toLowerCase().split(' ');
+        return availableItems.filter(item => {
+            const text = `${item.description} ${item.category} ${item.code}`.toLowerCase();
+            return terms.some(term => text.includes(term));
+        }).slice(0, 10);
     }
 };
 
@@ -147,5 +152,42 @@ export const analyzePrices = async (
         return response.text();
     } catch (error) {
         return "Analisi non disponibile al momento.";
+    }
+};
+
+/**
+ * Genera un report finanziario testuale basato sulle transazioni
+ */
+export const generateFinancialReport = async (
+    transactions: Expense[],
+    netProfit: number
+): Promise<string> => {
+    const apiKey = getApiKey();
+    if (!apiKey) return "";
+
+    try {
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+        // Preparo un riassunto delle transazioni per l'AI
+        const summary = transactions.slice(0, 50).map(t =>
+            `- ${t.date}: ${t.description} (${t.category}) = €${t.amount}`
+        ).join('\n');
+
+        const prompt = `
+      Analizza questi dati finanziari aziendali:
+      Saldo Netto Corrente: €${netProfit}
+      Ultime Transazioni:
+      ${summary}
+      
+      Fornisci un breve insight strategico (max 3 frasi) sulla situazione finanziaria.
+      Sii professionale e costruttivo.
+    `;
+
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        return response.text();
+    } catch (error) {
+        console.error("Errore AI Financial Report:", error);
+        return "";
     }
 };

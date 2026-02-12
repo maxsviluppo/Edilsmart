@@ -18,18 +18,19 @@ import { HardHat, Clock, Calendar, DollarSign, User } from 'lucide-react';
 import { Project } from './types';
 import { loadInvoices, saveInvoices, loadQuotes, saveQuotes } from './services/invoiceService';
 import { loadDocuments, saveDocuments } from './services/documentService';
+import { formatCurrency } from './services/formatUtils';
+import LoginHome from './components/LoginHome';
 
 
 const App: React.FC = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return localStorage.getItem('edilsmart_auth') === 'true';
+  });
+
   const [activeTab, setActiveTab] = useState('dashboard');
   const [projects, setProjects] = useState<Project[]>(() => {
     const saved = localStorage.getItem('projects');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', name: 'Ristrutturazione Villa Rossi', client: 'Giuseppe Rossi', status: 'In Corso', budget: 150000, startDate: '2024-01-15', endDate: '2024-12-31', iva: 10, progress: 45, location: 'Via Roma 10', totalExpenses: 65000, revenue: 150000 },
-      { id: '2', name: 'Rifacimento Facciata Condominio', client: 'Amm. Bianchi', status: 'In attesa', budget: 85000, startDate: '2024-03-01', endDate: '2024-09-30', iva: 20, progress: 0, location: 'Piazza Garibaldi 2', totalExpenses: 5000, revenue: 85000 },
-      { id: '3', name: 'Nuova Costruzione Box Auto', client: 'Luigi Verdi', status: 'Pianificato', budget: 35000, startDate: '2024-04-10', endDate: '2024-08-15', iva: 10, progress: 0, totalExpenses: 0, revenue: 35000 },
-      { id: '4', name: 'Manutenzione Straordinaria Tetto', client: 'Condominio Parco', status: 'Completato', budget: 28000, startDate: '2023-11-05', endDate: '2024-02-20', iva: 20, progress: 100, totalExpenses: 22000, revenue: 28000 },
-    ];
+    return saved ? JSON.parse(saved) : [];
   });
 
   useEffect(() => {
@@ -40,6 +41,21 @@ const App: React.FC = () => {
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [invoicesAction, setInvoicesAction] = useState<'new-quote' | undefined>(undefined);
+
+  const handleLogin = (password: string) => {
+    // Password temporanea semplice, l'utente potrà cambiarla o possiamo integrarla con Supabase Auth
+    if (password === 'edil2026') {
+      setIsAuthenticated(true);
+      localStorage.setItem('edilsmart_auth', 'true');
+    } else {
+      alert('Password errata!');
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem('edilsmart_auth');
+  };
 
   const selectedProject = projects.find(p => p.id === selectedProjectId);
   const visibleProjects = selectedProjectId ? projects.filter(p => p.id === selectedProjectId) : projects;
@@ -170,8 +186,7 @@ const App: React.FC = () => {
                     className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between cursor-pointer hover:border-blue-300 hover:shadow-md transition-all group"
                   >
                     <div>
-                      <p className="text-slate-500 text-sm font-medium uppercase group-hover:text-blue-600 transition-colors">Valore Totale</p>
-                      <p className="text-3xl font-bold text-slate-800 mt-1">€ {(projects.reduce((acc, p) => acc + p.budget, 0) / 1000).toFixed(1)}k</p>
+                      <p className="text-3xl font-bold text-slate-800 mt-1">{formatCurrency(projects.reduce((acc, p) => acc + p.budget, 0))}</p>
                     </div>
                     <div className="bg-emerald-50 p-3 rounded-lg text-emerald-600 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
                       <DollarSign size={24} />
@@ -218,7 +233,7 @@ const App: React.FC = () => {
                           )}
                           <div className="flex items-center gap-1">
                             <DollarSign size={14} />
-                            € {project.budget.toLocaleString()}
+                            {formatCurrency(project.budget)}
                           </div>
                         </div>
                       </div>
@@ -263,6 +278,10 @@ const App: React.FC = () => {
     }
   };
 
+  if (!isAuthenticated) {
+    return <LoginHome onLogin={handleLogin} />;
+  }
+
   return (
     <Layout
       activeTab={activeTab}
@@ -271,6 +290,7 @@ const App: React.FC = () => {
       projects={projects}
       selectedProjectId={selectedProjectId}
       onProjectSelect={setSelectedProjectId}
+      onLogout={handleLogout}
     >
       {renderContent()}
       <NewProjectModal

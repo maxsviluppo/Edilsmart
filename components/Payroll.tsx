@@ -15,7 +15,9 @@ import {
     PieChart as PieIcon,
     StickyNote,
     Edit,
-    FileText
+    FileText,
+    Printer,
+    Filter
 } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import Toast, { ToastType } from './Toast';
@@ -49,13 +51,17 @@ const Payroll: React.FC<PayrollProps> = ({ projects, selectedProjectId }) => {
     const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<{ id: string | null, type: 'employee' | null }>({ id: null, type: null });
 
+    // Filter States
+    const [startDateFilter, setStartDateFilter] = useState('');
+    const [endDateFilter, setEndDateFilter] = useState('');
+    const [selectedProjectFilter, setSelectedProjectFilter] = useState('');
+
     // Load Data
     useEffect(() => {
         const savedEmployees = localStorage.getItem('edilsmart_employees');
         if (savedEmployees) {
             try { setEmployees(JSON.parse(savedEmployees)); } catch (e) { }
         } else {
-            // Initial Dummy Data based on image
             setEmployees([
                 { id: '1', name: 'Enzo', role: 'Operaio', hourlyRate: 15 },
                 { id: '2', name: 'Lello', role: 'Operaio', hourlyRate: 14 },
@@ -79,6 +85,13 @@ const Payroll: React.FC<PayrollProps> = ({ projects, selectedProjectId }) => {
             try { setEmployeeNotes(JSON.parse(savedEmpNotes)); } catch (e) { }
         }
     }, []);
+
+    // Sync filter with sidebar selection
+    useEffect(() => {
+        if (selectedProjectId) {
+            setSelectedProjectFilter(selectedProjectId);
+        }
+    }, [selectedProjectId]);
 
     // Employee Notes State
     const [employeeNotes, setEmployeeNotes] = useState<Record<string, string>>({}); // Key: empId
@@ -269,42 +282,114 @@ const Payroll: React.FC<PayrollProps> = ({ projects, selectedProjectId }) => {
         })).filter(d => d.value > 0);
     }, [employees, employeeTotals]);
 
+    // Filtered Entries for Report
+    const filteredEntriesForReport = useMemo(() => {
+        return entries.filter(e => {
+            // Project matching
+            const matchesProject = !selectedProjectFilter || e.projectId === selectedProjectFilter;
+
+            // Date matching using string comparison (YYYY-MM-DD)
+            let matchesDate = true;
+            if (startDateFilter || endDateFilter) {
+                const matchesStartDate = !startDateFilter || e.date >= startDateFilter;
+                const matchesEndDate = !endDateFilter || e.date <= endDateFilter;
+                matchesDate = matchesStartDate && matchesEndDate;
+            } else {
+                // If no date filters are set, show only the currently viewed month
+                const entryDate = new Date(e.date);
+                matchesDate = entryDate.getMonth() === month && entryDate.getFullYear() === year;
+            }
+
+            return matchesProject && matchesDate;
+        }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [entries, selectedProjectFilter, startDateFilter, endDateFilter, month, year]);
+
+    const totalFilteredAmount = filteredEntriesForReport.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+    const handlePrint = () => {
+        window.print();
+    };
+
     return (
         <div className="space-y-6">
             {/* Header & Controls */}
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
-                <div className="flex items-center gap-4">
-                    <button
-                        onClick={() => setCurrentDate(new Date(year, month - 1, 1))}
-                        className="p-2 hover:bg-slate-100 rounded-lg"
-                    >
-                        <ChevronLeft size={24} className="text-slate-600" />
-                    </button>
-                    <h2 className="text-2xl font-bold text-slate-800 capitalize flex items-center gap-2">
-                        <Calendar className="text-blue-600" />
-                        {monthName}
-                    </h2>
-                    <button
-                        onClick={() => setCurrentDate(new Date(year, month + 1, 1))}
-                        className="p-2 hover:bg-slate-100 rounded-lg"
-                    >
-                        <ChevronRight size={24} className="text-slate-600" />
-                    </button>
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-6 print:hidden">
+                <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={() => setCurrentDate(new Date(year, month - 1, 1))}
+                            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                        >
+                            <ChevronLeft size={24} className="text-slate-600" />
+                        </button>
+                        <h2 className="text-2xl font-bold text-slate-800 capitalize flex items-center gap-2">
+                            <Calendar className="text-blue-600" />
+                            {monthName}
+                        </h2>
+                        <button
+                            onClick={() => setCurrentDate(new Date(year, month + 1, 1))}
+                            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                        >
+                            <ChevronRight size={24} className="text-slate-600" />
+                        </button>
+                    </div>
+
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setIsAddingEmployee(true)}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-bold shadow-lg shadow-blue-200 transition-all active:scale-95"
+                        >
+                            <Plus size={20} />
+                            Nuovo Dipendente
+                        </button>
+                    </div>
                 </div>
 
-                <div className="flex gap-2">
+                {/* Filters Bar */}
+                <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-slate-100">
+                    <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-lg border border-slate-200">
+                        <Filter size={16} className="text-slate-400 ml-1" />
+                        <select
+                            value={selectedProjectFilter}
+                            onChange={(e) => setSelectedProjectFilter(e.target.value)}
+                            className="bg-transparent border-none focus:ring-0 text-xs font-semibold text-slate-700 outline-none cursor-pointer min-w-[150px]"
+                        >
+                            <option value="">Tutti i Cantieri</option>
+                            {projects.map(p => (
+                                <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                        <Calendar size={14} className="text-slate-400" />
+                        <input
+                            type="date"
+                            value={startDateFilter}
+                            onChange={(e) => setStartDateFilter(e.target.value)}
+                            className="text-xs bg-transparent border-none focus:ring-0 outline-none p-0 w-24 font-medium"
+                        />
+                        <span className="text-slate-300">-</span>
+                        <input
+                            type="date"
+                            value={endDateFilter}
+                            onChange={(e) => setEndDateFilter(e.target.value)}
+                            className="text-xs bg-transparent border-none focus:ring-0 outline-none p-0 w-24 font-medium"
+                        />
+                    </div>
+
                     <button
-                        onClick={() => setIsAddingEmployee(true)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-bold shadow-sm"
+                        onClick={handlePrint}
+                        className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg flex items-center transition-all font-bold text-sm shadow-md ml-auto"
                     >
-                        <Plus size={20} />
-                        Nuovo Dipendente
+                        <Printer size={18} className="mr-2" />
+                        Stampa Report Paghe
                     </button>
                 </div>
             </div>
 
             {/* Main Grid */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto print:hidden">
                 <div className="min-w-max">
                     {/* Table Header */}
                     <div className="grid" style={{ gridTemplateColumns: `150px repeat(${daysInMonth}, 40px) 100px` }}>
@@ -393,7 +478,7 @@ const Payroll: React.FC<PayrollProps> = ({ projects, selectedProjectId }) => {
             </div>
 
             {/* Report & Stats Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20 print:hidden">
                 {/* Chart Section */}
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col">
                     <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
@@ -589,6 +674,96 @@ const Payroll: React.FC<PayrollProps> = ({ projects, selectedProjectId }) => {
                 onConfirm={() => confirmDelete.id && deleteEmployee(confirmDelete.id)}
                 onCancel={() => setConfirmDelete({ id: null, type: null })}
             />
+
+            {/* Printable Report Section */}
+            <div className="hidden print:block bg-white p-8">
+                <style>{`
+                    @media print {
+                        @page { size: A4 portrait; margin: 15mm; }
+                        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                    }
+                `}</style>
+
+                {/* Report Header */}
+                <div className="flex justify-between items-start border-b-2 border-slate-800 pb-6 mb-8">
+                    <div>
+                        <h1 className="text-3xl font-black text-slate-900 uppercase">Report Paghe e Stipendi</h1>
+                        <p className="text-slate-500 mt-1">Edilsmart - Gestione Personale</p>
+                    </div>
+                    <div className="text-right">
+                        <p className="font-bold text-slate-800">Data Report: {new Date().toLocaleDateString('it-IT')}</p>
+                        <p className="text-sm text-slate-600">
+                            {selectedProjectFilter
+                                ? `Cantiere: ${projects.find(p => p.id === selectedProjectFilter)?.name}`
+                                : 'Tutti i Cantieri'}
+                        </p>
+                        {(startDateFilter || endDateFilter) && (
+                            <p className="text-xs text-slate-500 mt-1">
+                                Periodo: {startDateFilter ? new Date(startDateFilter).toLocaleDateString('it-IT') : 'Inizio'} - {endDateFilter ? new Date(endDateFilter).toLocaleDateString('it-IT') : 'Fine'}
+                            </p>
+                        )}
+                        {!startDateFilter && !endDateFilter && (
+                            <p className="text-xs text-slate-500 mt-1">Mensilità: {monthName}</p>
+                        )}
+                    </div>
+                </div>
+
+                {/* Report Table */}
+                <table className="w-full text-left border-collapse">
+                    <thead>
+                        <tr className="bg-slate-100 border-y border-slate-300">
+                            <th className="px-4 py-3 text-xs font-bold uppercase text-slate-700">Data</th>
+                            <th className="px-4 py-3 text-xs font-bold uppercase text-slate-700">Dipendente</th>
+                            <th className="px-4 py-3 text-xs font-bold uppercase text-slate-700">Cantiere</th>
+                            <th className="px-4 py-3 text-xs font-bold uppercase text-slate-700">Note</th>
+                            <th className="px-4 py-3 text-xs font-bold uppercase text-slate-700 text-right">Importo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {filteredEntriesForReport.length > 0 ? (
+                            filteredEntriesForReport.map((e) => (
+                                <tr key={e.id} className="border-b border-slate-200">
+                                    <td className="px-4 py-3 text-sm text-slate-600 font-mono">{new Date(e.date).toLocaleDateString('it-IT')}</td>
+                                    <td className="px-4 py-3 text-sm text-slate-900 font-bold">{employees.find(emp => emp.id === e.employeeId)?.name || 'Sconosciuto'}</td>
+                                    <td className="px-4 py-3 text-sm text-slate-600">{projects.find(p => p.id === e.projectId)?.name || 'Generale'}</td>
+                                    <td className="px-4 py-3 text-sm text-slate-500 italic">{e.notes || '-'}</td>
+                                    <td className="px-4 py-3 text-sm font-bold text-right text-slate-900">
+                                        € {(e.amount || 0).toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                                    </td>
+                                </tr>
+                            ))
+                        ) : (
+                            <tr>
+                                <td colSpan={5} className="px-4 py-12 text-center text-slate-400 italic">
+                                    Nessuna voce trovata per i filtri selezionati
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                    <tfoot>
+                        <tr className="bg-slate-50 font-black">
+                            <td colSpan={4} className="px-4 py-4 text-right uppercase tracking-widest text-slate-700">Totale Spettanze</td>
+                            <td className="px-4 py-4 text-right text-lg border-t-2 border-slate-900">
+                                € {totalFilteredAmount.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                {/* Monthly Notes in Report (if spanning single month) */}
+                {!startDateFilter && !endDateFilter && currentNote && (
+                    <div className="mt-8 p-4 bg-amber-50 border border-amber-100 rounded-xl">
+                        <h4 className="text-xs font-bold uppercase text-amber-800 mb-2">Note del Mese:</h4>
+                        <p className="text-sm text-amber-900 whitespace-pre-wrap">{currentNote}</p>
+                    </div>
+                )}
+
+                {/* Footer */}
+                <div className="mt-12 pt-8 border-t border-slate-200 text-[10px] text-slate-400 flex justify-between">
+                    <span>Edilsmart HR System - Report Generato il {new Date().toLocaleString('it-IT')}</span>
+                    <span>Documento ad uso interno</span>
+                </div>
+            </div>
 
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
         </div>

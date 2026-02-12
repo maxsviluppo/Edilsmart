@@ -17,7 +17,8 @@ import {
   GanttChart,
   FileText,
   FileCheck,
-  Package
+  Package,
+  LogOut
 } from 'lucide-react';
 import { Project } from '../types';
 
@@ -29,6 +30,7 @@ interface LayoutProps {
   projects: Project[];
   selectedProjectId: string;
   onProjectSelect: (id: string) => void;
+  onLogout?: () => void;
 }
 
 const Layout: React.FC<LayoutProps> = ({
@@ -38,7 +40,8 @@ const Layout: React.FC<LayoutProps> = ({
   onNewProject,
   projects,
   selectedProjectId,
-  onProjectSelect
+  onProjectSelect,
+  onLogout
 }) => {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = React.useState(false);
@@ -51,15 +54,14 @@ const Layout: React.FC<LayoutProps> = ({
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'projects', label: 'Cantieri', icon: HardHat },
-    { id: 'computo', label: 'Computo Metrico', icon: Calculator },
     { id: 'cronoprogramma', label: 'Cronoprogramma', icon: GanttChart },
-    // { id: 'documents', label: 'Documenti', icon: FileCheck }, // Temporaneamente sospeso
-    { id: 'invoices', label: 'Fatture e Preventivi', icon: FileText },
+    { id: 'materials', label: 'Materiale', icon: Package },
+    { id: 'payroll', label: 'Paghe', icon: Wallet },
     { id: 'accounting', label: 'Contabilità', icon: Receipt },
-    { id: 'statistics', label: 'Statistiche', icon: PieChart },
-    { id: 'payroll', label: 'Paghe e Stipendi', icon: Wallet },
-    { id: 'materials', label: 'Materiali', icon: Package },
+    { id: 'computo', label: 'Computo Metrico', icon: Calculator },
+    { id: 'invoices', label: 'Fatture', icon: FileText },
     { id: 'pricelists', label: 'Prezziari', icon: Database },
+    { id: 'statistics', label: 'Statistiche', icon: PieChart },
   ];
 
   return (
@@ -160,11 +162,20 @@ const Layout: React.FC<LayoutProps> = ({
         <div className="p-4 border-t border-slate-800">
           <button
             onClick={() => setActiveTab('settings')}
-            className={`flex items-center w-full p-2 transition-colors rounded-lg ${activeTab === 'settings' ? 'text-emerald-400 bg-slate-800' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+            className={`flex items-center w-full p-2 mt-1 transition-colors rounded-lg ${activeTab === 'settings' ? 'text-emerald-400 bg-slate-800' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
           >
             <Settings size={22} className={(isSidebarOpen || isMobileSidebarOpen) ? 'mr-3' : 'mx-auto'} />
             {(isSidebarOpen || isMobileSidebarOpen) && <span>Impostazioni</span>}
           </button>
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="flex items-center w-full p-2 mt-1 text-rose-400 hover:text-rose-300 hover:bg-rose-900/20 transition-colors rounded-lg"
+            >
+              <LogOut size={22} className={(isSidebarOpen || isMobileSidebarOpen) ? 'mr-3' : 'mx-auto'} />
+              {(isSidebarOpen || isMobileSidebarOpen) && <span>Esci</span>}
+            </button>
+          )}
         </div>
       </aside>
 
