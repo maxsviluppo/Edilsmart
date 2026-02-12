@@ -128,10 +128,11 @@ const App: React.FC = () => {
 
   const handleAuth = async (data: { email: string; password?: string }, type: 'login' | 'register') => {
     // BYPASS PER TEST ADMIN (Fase di verifica)
-    if (data.password === 'admin99') {
+    if (data.password === 'admin99' || data.password === 'demoadmin') {
       setIsAuthenticated(true);
       setUserProfile({ role: 'superadmin', status: 'active' });
-      setToast({ message: "Accesso bypass Admin attivato per verifica!", type: 'success' });
+      setActiveTab('admin'); // Forza subito il pannello admin
+      setToast({ message: "Accesso bypass Admin attivato!", type: 'success' });
       return;
     }
 
@@ -141,14 +142,14 @@ const App: React.FC = () => {
         password: data.password!,
       });
       if (error) throw error;
-      setToast({ message: "Registrazione completata con successo!", type: 'success' });
+      setToast({ message: "Registrazione completata! Puoi accedere.", type: 'success' });
     } else {
       const { error } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password!,
       });
       if (error) throw error;
-      setToast({ message: "Bentornato!", type: 'success' });
+      setToast({ message: "Accesso effettuato.", type: 'success' });
     }
   };
 
