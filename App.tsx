@@ -15,6 +15,7 @@ import Documents from './components/Documents';
 import Payroll from './components/Payroll';
 import Materials from './components/Materials';
 import AdminPanel from './components/AdminPanel';
+import Toast, { ToastType } from './components/Toast';
 import {
   HardHat, Clock, Calendar, DollarSign, Package,
   LogOut,
@@ -35,6 +36,7 @@ const App: React.FC = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userProfile, setUserProfile] = useState<{ role: string, status: string } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [projects, setProjects] = useState<Project[]>([]);
@@ -68,7 +70,7 @@ const App: React.FC = () => {
           setUserProfile(data);
           // Se l'utente è bloccato, forziamo il logout
           if (data.status === 'blocked') {
-            alert("Il tuo account è stato bloccato dall'amministratore.");
+            setToast({ message: "Il tuo account è stato bloccato dall'amministratore.", type: 'error' });
             handleLogout();
           }
         }
@@ -125,19 +127,28 @@ const App: React.FC = () => {
   }, [isAuthenticated]);
 
   const handleAuth = async (data: { email: string; password?: string }, type: 'login' | 'register') => {
+    // BYPASS PER TEST ADMIN (Fase di verifica)
+    if (data.password === 'admin99') {
+      setIsAuthenticated(true);
+      setUserProfile({ role: 'superadmin', status: 'active' });
+      setToast({ message: "Accesso bypass Admin attivato per verifica!", type: 'success' });
+      return;
+    }
+
     if (type === 'register') {
       const { error } = await supabase.auth.signUp({
         email: data.email,
         password: data.password!,
       });
       if (error) throw error;
-      alert("Registrazione completata con successo!");
+      setToast({ message: "Registrazione completata con successo!", type: 'success' });
     } else {
       const { error } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password!,
       });
       if (error) throw error;
+      setToast({ message: "Bentornato!", type: 'success' });
     }
   };
 
@@ -389,6 +400,13 @@ const App: React.FC = () => {
         onClose={() => setIsNewProjectModalOpen(false)}
         onSave={handleSaveProject}
       />
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </Layout>
   );
 };
