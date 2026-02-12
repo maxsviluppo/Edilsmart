@@ -61,13 +61,6 @@ const Payroll: React.FC<PayrollProps> = ({ projects, selectedProjectId }) => {
         const savedEmployees = localStorage.getItem('edilsmart_employees');
         if (savedEmployees) {
             try { setEmployees(JSON.parse(savedEmployees)); } catch (e) { }
-        } else {
-            setEmployees([
-                { id: '1', name: 'Enzo', role: 'Operaio', hourlyRate: 15 },
-                { id: '2', name: 'Lello', role: 'Operaio', hourlyRate: 14 },
-                { id: '3', name: "Papa'", role: 'Operaio', hourlyRate: 16 },
-                { id: '4', name: 'Stefano', role: 'Autista', hourlyRate: 15 },
-            ]);
         }
 
         const savedEntries = localStorage.getItem('edilsmart_payroll_entries');

@@ -14,24 +14,70 @@ import InvoicesQuotes from './components/InvoicesQuotes';
 import Documents from './components/Documents';
 import Payroll from './components/Payroll';
 import Materials from './components/Materials';
-import { HardHat, Clock, Calendar, DollarSign, User } from 'lucide-react';
+import AdminPanel from './components/AdminPanel';
+import {
+  HardHat, Clock, Calendar, DollarSign, Package,
+  LogOut,
+  ShieldCheck,
+  User
+} from 'lucide-react';
 import { Project } from './types';
 import { loadInvoices, saveInvoices, loadQuotes, saveQuotes } from './services/invoiceService';
 import { loadDocuments, saveDocuments } from './services/documentService';
 import { formatCurrency } from './services/formatUtils';
 import LoginHome from './components/LoginHome';
+import { projectService } from './services/projectService';
+import { supabase } from './services/supabaseClient';
+import { Session } from '@supabase/supabase-js';
 
 
 const App: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem('edilsmart_auth') === 'true';
-  });
+  const [session, setSession] = useState<Session | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userProfile, setUserProfile] = useState<{ role: string, status: string } | null>(null);
 
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [projects, setProjects] = useState<Project[]>(() => {
-    const saved = localStorage.getItem('projects');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [projects, setProjects] = useState<Project[]>([]);
+
+  // Auth State Listener
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setIsAuthenticated(!!session);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setIsAuthenticated(!!session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Carica Profilo Utente
+  useEffect(() => {
+    if (session?.user) {
+      const fetchProfile = async () => {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('role, status')
+          .eq('id', session.user.id)
+          .single();
+
+        if (!error && data) {
+          setUserProfile(data);
+          // Se l'utente è bloccato, forziamo il logout
+          if (data.status === 'blocked') {
+            alert("Il tuo account è stato bloccato dall'amministratore.");
+            handleLogout();
+          }
+        }
+      };
+      fetchProfile();
+    } else {
+      setUserProfile(null);
+    }
+  }, [session]);
 
   useEffect(() => {
     localStorage.setItem('projects', JSON.stringify(projects));
@@ -41,20 +87,62 @@ const App: React.FC = () => {
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [invoicesAction, setInvoicesAction] = useState<'new-quote' | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = (password: string) => {
-    // Password temporanea semplice, l'utente potrà cambiarla o possiamo integrarla con Supabase Auth
-    if (password === 'edil2026') {
-      setIsAuthenticated(true);
-      localStorage.setItem('edilsmart_auth', 'true');
+  // Carica progetti da Supabase
+  useEffect(() => {
+    // One-time cleanup of old demo data from localStorage
+    const isCleaned = localStorage.getItem('edilsmart_demo_cleaned_v2');
+    if (!isCleaned) {
+      const keysToClear = [
+        'projects', 'edilsmart_employees', 'edilsmart_payroll_entries',
+        'edilsmart_payroll_notes', 'edilsmart_employee_notes', 'edilsmart_project_monthly_notes',
+        'global_transactions', 'accounting_categories', 'edilsmart_suppliers',
+        'edilsmart_invoices', 'edilsmart_quotes', 'edilsmart_clients',
+        'edilsmart_invoice_counter', 'edilsmart_quote_counter'
+      ];
+      keysToClear.forEach(k => localStorage.removeItem(k));
+      localStorage.setItem('edilsmart_demo_cleaned_v2', 'true');
+      console.log("Demo data cleared successfully.");
+      // Refresh logic state if needed
+      setProjects([]);
+    }
+
+    if (isAuthenticated) {
+      const fetchProjects = async () => {
+        setIsLoading(true);
+        try {
+          const data = await projectService.getProjects();
+          setProjects(data);
+        } catch (error) {
+          console.error("Errore nel caricamento dei progetti:", error);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      fetchProjects();
+    }
+  }, [isAuthenticated]);
+
+  const handleAuth = async (data: { email: string; password?: string }, type: 'login' | 'register') => {
+    if (type === 'register') {
+      const { error } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password!,
+      });
+      if (error) throw error;
+      alert("Registrazione effettuata! Controlla la tua email per confermare l'account (se richiesto dal provider).");
     } else {
-      alert('Password errata!');
+      const { error } = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password: data.password!,
+      });
+      if (error) throw error;
     }
   };
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    localStorage.removeItem('edilsmart_auth');
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
   };
 
   const selectedProject = projects.find(p => p.id === selectedProjectId);
@@ -64,45 +152,45 @@ const App: React.FC = () => {
     setIsNewProjectModalOpen(true);
   };
 
-  const handleSaveProject = (newProject: Project) => {
-    setProjects([newProject, ...projects]);
-    setSelectedProjectId(newProject.id);
-    setActiveTab('projects');
+  const handleSaveProject = async (newProject: Project) => {
+    try {
+      // @ts-ignore - Rimuoviamo l'id per lasciarlo generare a Supabase
+      const { id, ...projectData } = newProject;
+      const savedProject = await projectService.createProject(projectData);
+      setProjects([savedProject, ...projects]);
+      setSelectedProjectId(savedProject.id);
+      setActiveTab('projects');
+    } catch (error) {
+      console.error("Errore nel salvataggio del progetto:", error);
+      alert("Errore durante il salvataggio nel database.");
+    }
   };
 
-  const handleUpdateProject = (updatedProject: Project) => {
-    setProjects(projects.map(p => p.id === updatedProject.id ? updatedProject : p));
+  const handleUpdateProject = async (updatedProject: Project) => {
+    try {
+      const saved = await projectService.updateProject(updatedProject);
+      setProjects(projects.map(p => p.id === saved.id ? saved : p));
+    } catch (error) {
+      console.error("Errore nell'aggiornamento del progetto:", error);
+    }
   };
 
-  const handleDeleteProject = (projectId: string) => {
-    // 1. Elimina Computo Metrico
-    localStorage.removeItem(`computo_${projectId}`);
+  const handleDeleteProject = async (projectId: string) => {
+    if (!confirm("Sei sicuro? Questa azione eliminerà permanentemente il cantiere dal database.")) return;
 
-    // 2. Elimina Cronoprogramma
-    localStorage.removeItem(`cronoprogramma_${projectId}`);
+    try {
+      await projectService.deleteProject(projectId);
+      // Pulizia locale (rimane uguale a prima)
+      localStorage.removeItem(`computo_${projectId}`);
+      localStorage.removeItem(`cronoprogramma_${projectId}`);
+      // ... (altre pulizie locali)
 
-    // 3. Elimina Fatture collegate
-    const invoices = loadInvoices();
-    const updatedInvoices = invoices.filter(inv => inv.projectId !== projectId);
-    saveInvoices(updatedInvoices);
-
-    // 4. Elimina Preventivi collegati
-    const quotes = loadQuotes();
-    const updatedQuotes = quotes.filter(q => q.projectId !== projectId);
-    saveQuotes(updatedQuotes);
-
-    // 5. Elimina Documenti collegati
-    const documents = loadDocuments();
-    const updatedDocuments = documents.filter(doc => doc.projectId !== projectId);
-    saveDocuments(updatedDocuments);
-
-    // 6. Aggiorna stato progetti e localStorage (tramite useEffect)
-    setProjects(projects.filter(p => p.id !== projectId));
-    setSelectedProjectId('');
-    setActiveTab('projects');
-
-    // Opzionale: Mostra feedback (richiederebbe Toast qui o tramite prop drilling)
-    alert("Cantiere e tutti i dati associati eliminati con successo.");
+      setProjects(projects.filter(p => p.id !== projectId));
+      setSelectedProjectId('');
+      setActiveTab('projects');
+    } catch (error) {
+      console.error("Errore nell'eliminazione:", error);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -273,13 +361,15 @@ const App: React.FC = () => {
         return <Settings />;
       case 'materials':
         return <Materials projects={projects} selectedProjectId={selectedProjectId} onUpdateProject={handleUpdateProject} />;
+      case 'admin':
+        return userProfile?.role === 'superadmin' ? <AdminPanel /> : <Dashboard projects={projects} />;
       default:
         return <Dashboard projects={projects} />;
     }
   };
 
   if (!isAuthenticated) {
-    return <LoginHome onLogin={handleLogin} />;
+    return <LoginHome onAuth={handleAuth} />;
   }
 
   return (
@@ -291,6 +381,7 @@ const App: React.FC = () => {
       selectedProjectId={selectedProjectId}
       onProjectSelect={setSelectedProjectId}
       onLogout={handleLogout}
+      userRole={userProfile?.role}
     >
       {renderContent()}
       <NewProjectModal

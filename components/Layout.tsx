@@ -18,7 +18,8 @@ import {
   FileText,
   FileCheck,
   Package,
-  LogOut
+  LogOut,
+  ShieldCheck
 } from 'lucide-react';
 import { Project } from '../types';
 
@@ -31,6 +32,7 @@ interface LayoutProps {
   selectedProjectId: string;
   onProjectSelect: (id: string) => void;
   onLogout?: () => void;
+  userRole?: string;
 }
 
 const Layout: React.FC<LayoutProps> = ({
@@ -41,7 +43,8 @@ const Layout: React.FC<LayoutProps> = ({
   projects,
   selectedProjectId,
   onProjectSelect,
-  onLogout
+  onLogout,
+  userRole
 }) => {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = React.useState(false);
@@ -63,6 +66,10 @@ const Layout: React.FC<LayoutProps> = ({
     { id: 'pricelists', label: 'Prezziari', icon: Database },
     { id: 'statistics', label: 'Statistiche', icon: PieChart },
   ];
+
+  if (userRole === 'superadmin') {
+    menuItems.push({ id: 'admin', label: 'Amministrazione', icon: ShieldCheck });
+  }
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">

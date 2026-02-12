@@ -68,12 +68,12 @@ const Dashboard: React.FC<DashboardProps> = ({ projects }) => {
     }));
   }, [projects]);
 
-  const pieData = [
+  const pieData = projects.length > 0 ? [
     { name: 'Materiali', value: 400, color: '#3b82f6' },
     { name: 'Manodopera', value: 300, color: '#10b981' },
     { name: 'Noleggi', value: 150, color: '#f59e0b' },
     { name: 'Altro', value: 50, color: '#6366f1' },
-  ];
+  ] : [];
 
   return (
     <div className="space-y-8">
