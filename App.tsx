@@ -131,7 +131,7 @@ const App: React.FC = () => {
         password: data.password!,
       });
       if (error) throw error;
-      alert("Registrazione effettuata! Controlla la tua email per confermare l'account (se richiesto dal provider).");
+      alert("Registrazione completata con successo!");
     } else {
       const { error } = await supabase.auth.signInWithPassword({
         email: data.email,
