@@ -39,6 +39,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
             startDate: formData.startDate,
             endDate: formData.endDate,
             iva: formData.ivaSelection === 'custom' ? (parseFloat(formData.ivaCustom) || 0) : parseInt(formData.ivaSelection),
+            description: formData.description,
             status: 'Pianificato',
             progress: 0,
             computo: [],

