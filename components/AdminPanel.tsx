@@ -3,13 +3,9 @@ import React, { useState, useEffect } from 'react';
 import {
     Users,
     ShieldAlert,
-    UserMinus,
     Ban,
     CheckCircle,
     Search,
-    CreditCard,
-    BarChart3,
-    Settings,
     Activity,
     Trash2
 } from 'lucide-react';
@@ -72,8 +68,7 @@ const AdminPanel: React.FC = () => {
     const stats = {
         total: users.length,
         active: users.filter(u => u.status === 'active').length,
-        blocked: users.filter(u => u.status === 'blocked').length,
-        premium: users.filter(u => u.subscription_status === 'active').length
+        blocked: users.filter(u => u.status === 'blocked').length
     };
 
     return (
@@ -84,26 +79,22 @@ const AdminPanel: React.FC = () => {
                     <ShieldAlert size={120} />
                 </div>
                 <div className="relative z-10">
-                    <h2 className="text-3xl font-black italic tracking-tight">RISTOSYNC<span className="text-blue-500 uppercase">AI</span> Monitor</h2>
-                    <p className="text-slate-400 mt-2 font-medium">Pannello di Controllo Super Amministratore</p>
+                    <h2 className="text-3xl font-black italic tracking-tight uppercase">EDILSMART<span className="text-blue-500">AI</span> Monitor</h2>
+                    <p className="text-slate-400 mt-2 font-medium">Pannello Controllo Utenti Iscritti</p>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-8">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-6 mt-8">
                     <div className="bg-white/5 backdrop-blur-md p-4 rounded-xl border border-white/10">
-                        <p className="text-xs font-bold text-slate-400 uppercase">Totale Iscritti</p>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Totale Iscritti</p>
                         <p className="text-2xl font-black mt-1">{stats.total}</p>
                     </div>
                     <div className="bg-white/5 backdrop-blur-md p-4 rounded-xl border border-white/10">
-                        <p className="text-xs font-bold text-slate-400 uppercase">Utenti Attivi</p>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Utenti Attivi</p>
                         <p className="text-2xl font-black mt-1 text-emerald-400">{stats.active}</p>
                     </div>
                     <div className="bg-white/5 backdrop-blur-md p-4 rounded-xl border border-white/10">
-                        <p className="text-xs font-bold text-slate-400 uppercase">Account Bloccati</p>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Account Bloccati</p>
                         <p className="text-2xl font-black mt-1 text-rose-400">{stats.blocked}</p>
-                    </div>
-                    <div className="bg-white/5 backdrop-blur-md p-4 rounded-xl border border-white/10">
-                        <p className="text-xs font-bold text-slate-400 uppercase">Canoni Attivi</p>
-                        <p className="text-2xl font-black mt-1 text-blue-400">{stats.premium}</p>
                     </div>
                 </div>
             </div>
@@ -135,9 +126,9 @@ const AdminPanel: React.FC = () => {
                             <tr className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-100">
                                 <th className="px-6 py-4">Socio / Email</th>
                                 <th className="px-6 py-4">Stato Accesso</th>
-                                <th className="px-6 py-4">Canone Mensile</th>
+                                <th className="px-6 py-4">Ruolo</th>
                                 <th className="px-6 py-4">Data Iscrizione</th>
-                                <th className="px-10 py-4 text-center">Azioni</th>
+                                <th className="px-10 py-4 text-center">Azioni Correttive</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -167,17 +158,16 @@ const AdminPanel: React.FC = () => {
                                     </td>
                                     <td className="px-6 py-4">
                                         <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase border ${user.status === 'active'
-                                                ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                                                : 'bg-rose-50 text-rose-600 border-rose-200'
+                                            ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                                            : 'bg-rose-50 text-rose-600 border-rose-200'
                                             }`}>
                                             {user.status === 'active' ? 'Attivo' : 'Bloccato'}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-2">
-                                            <CreditCard size={14} className={user.subscription_status === 'active' ? 'text-blue-500' : 'text-slate-300'} />
-                                            <span className="text-xs font-medium text-slate-600">
-                                                {user.subscription_status === 'active' ? 'Pagato (Stripe)' : 'Non Attivo'}
+                                            <span className="text-[10px] font-bold text-slate-600 uppercase bg-slate-100 px-2 py-1 rounded">
+                                                {user.role}
                                             </span>
                                         </div>
                                     </td>
@@ -189,16 +179,14 @@ const AdminPanel: React.FC = () => {
                                             <button
                                                 onClick={() => handleToggleStatus(user)}
                                                 className={`p-2 rounded-lg transition-all ${user.status === 'active'
-                                                        ? 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
-                                                        : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
+                                                    ? 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                                                    : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
                                                     }`}
                                                 title={user.status === 'active' ? 'Blocca Accesso' : 'Riattiva Accesso'}
                                             >
                                                 {user.status === 'active' ? <Ban size={18} /> : <CheckCircle size={18} />}
                                             </button>
-                                            <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="Dettagli Canone">
-                                                <BarChart3 size={18} />
-                                            </button>
+
                                             <button className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" title="Elimina Permanentemente">
                                                 <Trash2 size={18} />
                                             </button>
@@ -211,33 +199,6 @@ const AdminPanel: React.FC = () => {
                 </div>
             </div>
 
-            {/* Configurazione Sistema Sezione */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
-                    <div className="flex items-center gap-3 mb-4">
-                        <Settings className="text-slate-400" size={20} />
-                        <h4 className="font-bold text-slate-800 uppercase tracking-tighter">Parametri Canone</h4>
-                    </div>
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-center p-3 bg-white rounded-xl border border-slate-100">
-                            <span className="text-sm font-medium">Costo Abbonamento Mensile</span>
-                            <span className="font-bold text-blue-600">€ 49.00 / mese</span>
-                        </div>
-                        <div className="flex justify-between items-center p-3 bg-white rounded-xl border border-slate-100 opacity-50 cursor-not-allowed">
-                            <span className="text-sm font-medium">Configurazione Stripe API</span>
-                            <span className="text-xs font-bold text-slate-400 italic">Pre-configurato</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-blue-600 rounded-2xl p-8 text-white">
-                    <h4 className="text-xl font-bold mb-2 tracking-tight italic">Coming Soon: Stripe Connect</h4>
-                    <p className="text-sm text-blue-100 mb-6">La gestione automatica dei pagamenti ricorrenti tramite Stripe sarà attivata nella Fase 2 dello sviluppo.</p>
-                    <button className="w-full bg-white text-blue-600 font-black py-3 rounded-xl shadow-lg border-2 border-transparent hover:bg-blue-50 transition-all uppercase tracking-widest text-xs">
-                        Configura Fatturazione
-                    </button>
-                </div>
-            </div>
         </div>
     );
 };

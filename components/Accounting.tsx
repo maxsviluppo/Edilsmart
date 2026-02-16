@@ -44,15 +44,27 @@ import Toast, { ToastType } from './Toast';
 interface AccountingProps {
   selectedProjectId?: string;
   projects?: Project[];
+  globalExpenses?: Expense[];
   onUpdateProject?: (project: Project) => void;
+  onAddExpense?: (projectId: string | null, expense: Omit<Expense, 'id'>) => Promise<any>;
+  onUpdateExpense?: (expense: any) => Promise<void>;
+  onDeleteExpense?: (expenseId: string, projectId?: string) => Promise<void>;
   onCreateQuote?: () => void;
 }
 
-const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, onUpdateProject, onCreateQuote }) => {
+const Accounting: React.FC<AccountingProps> = ({
+  selectedProjectId,
+  projects,
+  globalExpenses,
+  onUpdateProject,
+  onAddExpense,
+  onUpdateExpense,
+  onDeleteExpense,
+  onCreateQuote
+}) => {
   const project = projects?.find(p => p.id === selectedProjectId);
 
   // State for local global transactions (not project-specific)
-  const [localGlobalTransactions, setLocalGlobalTransactions] = useState<Expense[]>([]);
   const [activeTab, setActiveTab] = useState<'transactions' | 'suppliers' | 'categories' | 'invoices' | 'reports'>('transactions');
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -74,10 +86,7 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
 
   // Initial Load
   const loadAllData = useCallback(() => {
-    const globalExpenses = localStorage.getItem('global_transactions');
-    if (globalExpenses) {
-      try { setLocalGlobalTransactions(JSON.parse(globalExpenses)); } catch (e) { }
-    }
+    // Global expenses are now handled by props
 
     const savedCategories = localStorage.getItem('accounting_categories');
     if (savedCategories) {
@@ -120,12 +129,7 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
     };
   }, [loadAllData]);
 
-  // Sync Global Transactions
-  useEffect(() => {
-    if (!project) {
-      localStorage.setItem('global_transactions', JSON.stringify(localGlobalTransactions));
-    }
-  }, [localGlobalTransactions, project?.id]);
+  // Sync Global Transactions handled by parent App.tsx
 
   // Combined data for display and filtering
   const allTransactions = useMemo(() => {
@@ -136,7 +140,7 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
       result = [...(project.expenses || [])];
     } else if (projects) {
       // Global View: Aggregate from all projects + general entries
-      result = [...localGlobalTransactions];
+      result = [...(globalExpenses || [])];
       projects.forEach(p => {
         if (p.expenses) {
           const pExp = p.expenses.map(e => ({
@@ -157,7 +161,7 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
         return {
           id: `payroll_${pe.id}`,
           date: pe.date,
-          description: `Dipendente: ${emp?.name || 'Sconosciuto'}${!project && proj ? ` [${proj.name}]` : ''}`,
+          description: `${emp?.name || 'Sconosciuto'}${!project && proj ? ` [${proj.name}]` : ''}`,
           amount: -(pe.amount || 0), // Outflow is negative
           category: 'Manodopera',
           status: 'Pagato' as const,
@@ -165,7 +169,7 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
       });
 
     return [...result, ...virtualPayrollExpenses];
-  }, [localGlobalTransactions, projects, payrollEntries, employees, project?.id]);
+  }, [globalExpenses, projects, payrollEntries, employees, project?.id]);
 
   const filteredTransactions = useMemo(() => {
     return allTransactions.filter(t => {
@@ -236,20 +240,32 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
   const [statusMenuOpen, setStatusMenuOpen] = useState<string | null>(null);
 
   // Handlers
-  const handleStatusChange = (id: string, newStatus: 'Pagato' | 'In Attesa') => {
+  const handleStatusChange = async (id: string, newStatus: 'Pagato' | 'In Attesa') => {
     if (id.startsWith('payroll_')) return;
 
-    // Find where the transaction is
-    const projWhereExists = projects?.find(p => p.expenses?.some(e => e.id === id));
-    if (projWhereExists && onUpdateProject) {
-      const upd = projWhereExists.expenses?.map(e => e.id === id ? { ...e, status: newStatus } : e) || [];
-      onUpdateProject({ ...projWhereExists, expenses: upd });
+    const transactionToUpdate = allTransactions.find(t => t.id === id);
+    if (!transactionToUpdate) {
+      console.error("Transaction not found for status update:", id);
+      setToast({ message: `Errore: Operazione non trovata`, type: 'error' });
+      return;
+    }
+
+    const updatedTransaction = { ...transactionToUpdate, status: newStatus };
+
+    if (onUpdateExpense) {
+      try {
+        await onUpdateExpense(updatedTransaction);
+        setToast({ message: `Stato aggiornato a ${newStatus}`, type: 'success' });
+      } catch (error) {
+        console.error("Errore nell'aggiornamento dello stato dell'operazione:", error);
+        setToast({ message: `Errore nell'aggiornamento dello stato`, type: 'error' });
+      }
     } else {
-      setLocalGlobalTransactions(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t));
+      console.warn("onUpdateExpense prop is not provided. Cannot update expense status.");
+      setToast({ message: `Errore: Funzione di aggiornamento non disponibile`, type: 'error' });
     }
 
     setStatusMenuOpen(null);
-    setToast({ message: `Stato aggiornato a ${newStatus}`, type: 'success' });
   };
 
   const getCategoryStyle = (cat: string) => {
@@ -263,7 +279,7 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
     }
   };
 
-  const handleCreateTransaction = (e: React.FormEvent) => {
+  const handleCreateTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newTransaction.description && newTransaction.amount !== undefined) {
       const finalAmount = (newTransaction.category === 'Ricavi')
@@ -282,40 +298,58 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
         projectId: project?.id
       };
 
-      if (project && onUpdateProject) {
-        onUpdateProject({
-          ...project,
-          expenses: [transaction, ...(project.expenses || [])]
-        });
-      } else {
-        setLocalGlobalTransactions([transaction, ...localGlobalTransactions]);
-      }
+      if (onAddExpense) {
+        try {
+          const savedExpense = await onAddExpense(project?.id || null, {
+            date: newTransaction.date || new Date().toISOString().split('T')[0],
+            description: newTransaction.description!,
+            amount: finalAmount,
+            category: newTransaction.category || 'Altro',
+            status: newTransaction.status as 'Pagato' | 'In Attesa' || 'In Attesa',
+            invoiceNumber: newTransaction.invoiceNumber,
+            paymentType: newTransaction.paymentType,
+            projectId: project?.id
+          });
 
-      setIsNewTransactionModalOpen(false);
-      setNewTransaction({
-        date: new Date().toISOString().split('T')[0],
-        description: '',
-        amount: 0,
-        category: 'Materiali',
-        status: 'In Attesa'
-      });
-      setToast({ message: 'Operazione registrata con successo', type: 'success' });
+          // State updated in App.tsx via onAddExpense
+
+          setToast({ message: 'Operazione registrata con successo', type: 'success' });
+          setIsNewTransactionModalOpen(false);
+          setNewTransaction({
+            date: new Date().toISOString().split('T')[0],
+            description: '',
+            amount: 0,
+            category: 'Materiali',
+            status: 'In Attesa'
+          });
+        } catch (error) {
+          console.error("Errore salvataggio transazione:", error);
+          // Toast gestito da App.tsx
+        }
+      }
     }
   };
 
-  const handleDeleteTransaction = (id: string) => {
-    const projWhereExists = projects?.find(p => p.expenses?.some(e => e.id === id));
-    if (projWhereExists && onUpdateProject) {
-      const upd = projWhereExists.expenses?.filter(e => e.id !== id) || [];
-      onUpdateProject({ ...projWhereExists, expenses: upd });
+  const handleDeleteTransaction = async (id: string) => {
+    const trans = allTransactions.find(t => t.id === id);
+    const projectId = trans?.projectId;
+
+    if (onDeleteExpense) {
+      try {
+        await onDeleteExpense(id, projectId);
+        setToast({ message: 'Registrazione eliminata con successo', type: 'success' });
+      } catch (error) {
+        console.error("Errore nell'eliminazione dell'operazione:", error);
+        setToast({ message: `Errore nell'eliminazione dell'operazione`, type: 'error' });
+      }
     } else {
-      setLocalGlobalTransactions(localGlobalTransactions.filter(t => t.id !== id));
+      console.warn("onDeleteExpense prop is not provided. Cannot delete expense.");
+      setToast({ message: `Errore: Funzione di eliminazione non disponibile`, type: 'error' });
     }
     setDeletingTransactionId(null);
-    setToast({ message: 'Registrazione eliminata con successo', type: 'success' });
   };
 
-  const handleUpdateTransaction = (e: React.FormEvent) => {
+  const handleUpdateTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingTransaction) {
       const finalAmount = editingTransaction.category === 'Ricavi'
@@ -324,12 +358,14 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
 
       const updT = { ...editingTransaction, amount: finalAmount };
 
-      const projWhereExists = projects?.find(p => p.expenses?.some(e => e.id === updT.id));
-      if (projWhereExists && onUpdateProject) {
-        const upd = projWhereExists.expenses?.map(t => t.id === updT.id ? updT : t) || [];
-        onUpdateProject({ ...projWhereExists, expenses: upd });
-      } else {
-        setLocalGlobalTransactions(prev => prev.map(t => t.id === updT.id ? updT : t));
+      if (onUpdateExpense) {
+        try {
+          await onUpdateExpense(updT);
+          setToast({ message: 'Registrazione aggiornata con successo', type: 'success' });
+        } catch (error) {
+          console.error("Errore aggiornamento:", error);
+          setToast({ message: 'Errore durante l\'aggiornamento', type: 'error' });
+        }
       }
 
       setIsEditModalOpen(false);
@@ -592,7 +628,9 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
                           {new Date(t.date).toLocaleDateString('it-IT')}
                         </td>
                         <td className="px-6 py-4">
-                          <div className="font-semibold text-slate-800">{t.description}</div>
+                          <div className="font-semibold text-slate-800">
+                            {t.description.replace(/^(Materiale|Dipendente|Acconto Cantiere):\s*/i, '')}
+                          </div>
                         </td>
                         <td className="px-6 py-4">
                           <span className={`px-3 py-1 rounded-full text-[11px] font-bold border ${getCategoryStyle(t.category)}`}>
@@ -690,8 +728,8 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
       {/* MODALS */}
       {isNewTransactionModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 print:hidden">
-          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl animate-in zoom-in duration-200">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
               <h3 className="text-xl font-bold text-slate-800">Nuova Registrazione</h3>
               <button
                 onClick={() => setIsNewTransactionModalOpen(false)}
@@ -702,154 +740,157 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
               </button>
             </div>
 
-            <form onSubmit={handleCreateTransaction} className="p-8 space-y-6">
-              <div className="grid grid-cols-2 gap-6">
+            <div className="flex-1 overflow-y-auto">
+              <form onSubmit={handleCreateTransaction} className="p-8 space-y-6">
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-600 ml-1 italic">Data Operazione</label>
+                    <input
+                      type="date"
+                      required
+                      value={newTransaction.date}
+                      onChange={(e) => setNewTransaction({ ...newTransaction, date: e.target.value })}
+                      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-600 ml-1 italic">Categoria</label>
+                    <select
+                      value={newTransaction.category}
+                      onChange={(e) => setNewTransaction({ ...newTransaction, category: e.target.value })}
+                      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none appearance-none"
+                    >
+                      {categories.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-600 ml-1 italic">Data Operazione</label>
+                  <label className="text-sm font-bold text-slate-600 ml-1 italic">Descrizione</label>
                   <input
-                    type="date"
+                    type="text"
                     required
-                    value={newTransaction.date}
-                    onChange={(e) => setNewTransaction({ ...newTransaction, date: e.target.value })}
+                    placeholder="Esempio: Acquisto Cemento o Acconto Lavori..."
+                    value={newTransaction.description}
+                    onChange={(e) => setNewTransaction({ ...newTransaction, description: e.target.value })}
                     className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none"
                   />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-600 ml-1 italic">Categoria</label>
-                  <select
-                    value={newTransaction.category}
-                    onChange={(e) => setNewTransaction({ ...newTransaction, category: e.target.value })}
-                    className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none appearance-none"
+
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-600 ml-1 italic">Importo (€)</label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">€</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        required
+                        placeholder="0.00"
+                        value={newTransaction.amount === 0 ? '' : newTransaction.amount}
+                        onChange={(e) => setNewTransaction({ ...newTransaction, amount: parseFloat(e.target.value) || 0 })}
+                        className="w-full pl-10 pr-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-lg"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-600 ml-1 italic">Stato Pagamento</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setNewTransaction({ ...newTransaction, status: 'Pagato' })}
+                        className={`py-3 rounded-2xl text-xs font-bold border transition-all ${newTransaction.status === 'Pagato'
+                          ? 'bg-emerald-600 border-emerald-600 text-white shadow-md'
+                          : 'bg-white border-slate-200 text-slate-500 hover:border-emerald-500'
+                          }`}
+                      >
+                        Pagato
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewTransaction({ ...newTransaction, status: 'In Attesa' })}
+                        className={`py-3 rounded-2xl text-xs font-bold border transition-all ${newTransaction.status === 'In Attesa'
+                          ? 'bg-amber-500 border-amber-500 text-white shadow-md'
+                          : 'bg-white border-slate-200 text-slate-500 hover:border-amber-500'
+                          }`}
+                      >
+                        Pendete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="pt-4 flex gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsNewTransactionModalOpen(false)}
+                    className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-50 rounded-2xl transition-all"
                   >
-                    {categories.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
+                    Indietro
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-[2] py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl shadow-xl shadow-blue-100 transition-all"
+                  >
+                    Conferma Registrazione
+                  </button>
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-600 ml-1 italic">Descrizione</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Esempio: Acquisto Cemento o Acconto Lavori..."
-                  value={newTransaction.description}
-                  onChange={(e) => setNewTransaction({ ...newTransaction, description: e.target.value })}
-                  className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-600 ml-1 italic">Importo (€)</label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">€</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      required
-                      placeholder="0.00"
-                      value={newTransaction.amount === 0 ? '' : newTransaction.amount}
-                      onChange={(e) => setNewTransaction({ ...newTransaction, amount: parseFloat(e.target.value) || 0 })}
-                      className="w-full pl-10 pr-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-lg"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-600 ml-1 italic">Stato Pagamento</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setNewTransaction({ ...newTransaction, status: 'Pagato' })}
-                      className={`py-3 rounded-2xl text-xs font-bold border transition-all ${newTransaction.status === 'Pagato'
-                        ? 'bg-emerald-600 border-emerald-600 text-white shadow-md'
-                        : 'bg-white border-slate-200 text-slate-500 hover:border-emerald-500'
-                        }`}
-                    >
-                      Pagato
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setNewTransaction({ ...newTransaction, status: 'In Attesa' })}
-                      className={`py-3 rounded-2xl text-xs font-bold border transition-all ${newTransaction.status === 'In Attesa'
-                        ? 'bg-amber-500 border-amber-500 text-white shadow-md'
-                        : 'bg-white border-slate-200 text-slate-500 hover:border-amber-500'
-                        }`}
-                    >
-                      Pendete
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-4 flex gap-4">
-                <button
-                  type="button"
-                  onClick={() => setIsNewTransactionModalOpen(false)}
-                  className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-50 rounded-2xl transition-all"
-                >
-                  Indietro
-                </button>
-                <button
-                  type="submit"
-                  className="flex-[2] py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl shadow-xl shadow-blue-100 transition-all"
-                >
-                  Conferma Registrazione
-                </button>
-              </div>
-            </form>
+              </form>
+            </div>
           </div>
         </div>
       )}
 
       {/* EDIT MODAL */}
-      {isEditModalOpen && editingTransaction && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 print:hidden">
-          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl p-8 space-y-6">
-            <h3 className="text-xl font-bold text-slate-800">Modifica Operazione</h3>
-            <form onSubmit={handleUpdateTransaction} className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-600">Descrizione</label>
-                <input
-                  type="text"
-                  required
-                  value={editingTransaction.description}
-                  onChange={(e) => setEditingTransaction({ ...editingTransaction, description: e.target.value })}
-                  className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-6">
+      {
+        isEditModalOpen && editingTransaction && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 print:hidden">
+            <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl p-8 space-y-6">
+              <h3 className="text-xl font-bold text-slate-800">Modifica Operazione</h3>
+              <form onSubmit={handleUpdateTransaction} className="space-y-6">
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-600">Data</label>
+                  <label className="text-sm font-bold text-slate-600">Descrizione</label>
                   <input
-                    type="date"
-                    value={editingTransaction.date}
-                    onChange={(e) => setEditingTransaction({ ...editingTransaction, date: e.target.value })}
+                    type="text"
+                    required
+                    value={editingTransaction.description}
+                    onChange={(e) => setEditingTransaction({ ...editingTransaction, description: e.target.value })}
                     className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none"
                   />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-600">Importo</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={Math.abs(editingTransaction.amount)}
-                    onChange={(e) => setEditingTransaction({ ...editingTransaction, amount: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold"
-                  />
-                </div>
-              </div>
 
-              <div className="flex gap-4">
-                <button type="button" onClick={() => setIsEditModalOpen(false)} className="flex-1 py-3 text-slate-500 font-bold">Annulla</button>
-                <button type="submit" className="flex-[2] py-3 bg-blue-600 text-white font-bold rounded-2xl shadow-lg">Salva Modifiche</button>
-              </div>
-            </form>
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-600">Data</label>
+                    <input
+                      type="date"
+                      value={editingTransaction.date}
+                      onChange={(e) => setEditingTransaction({ ...editingTransaction, date: e.target.value })}
+                      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-600">Importo</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={Math.abs(editingTransaction.amount)}
+                      onChange={(e) => setEditingTransaction({ ...editingTransaction, amount: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <button type="button" onClick={() => setIsEditModalOpen(false)} className="flex-1 py-3 text-slate-500 font-bold">Annulla</button>
+                  <button type="submit" className="flex-[2] py-3 bg-blue-600 text-white font-bold rounded-2xl shadow-lg">Salva Modifiche</button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* CONFIRM DELETE MODAL */}
       <ConfirmModal
@@ -866,13 +907,15 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
       />
 
       {/* TOASTS */}
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
+      {
+        toast && (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        )
+      }
       {/* Printable Report Section */}
       <div className="hidden print:block bg-white p-8">
         <style>{`
@@ -949,7 +992,7 @@ const Accounting: React.FC<AccountingProps> = ({ selectedProjectId, projects, on
           <span>Contabilità {project ? project.name : 'Globale'}</span>
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 

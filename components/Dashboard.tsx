@@ -18,6 +18,7 @@ import { formatNumber, formatChartValue, formatCurrency } from '../services/form
 
 interface DashboardProps {
   projects: Project[];
+  selectedProjectId?: string;
 }
 
 const StatCard = ({ title, value, icon: Icon, trend, color }: any) => (
@@ -46,12 +47,19 @@ const StatCard = ({ title, value, icon: Icon, trend, color }: any) => (
   </div>
 );
 
-const Dashboard: React.FC<DashboardProps> = ({ projects }) => {
+const Dashboard: React.FC<DashboardProps> = ({ projects, selectedProjectId }) => {
+  const filteredProjects = useMemo(() => {
+    if (selectedProjectId) {
+      return projects.filter(p => p.id === selectedProjectId);
+    }
+    return projects;
+  }, [projects, selectedProjectId]);
+
   const stats = useMemo(() => {
-    const totalBudget = projects.reduce((sum, p) => sum + (p.budget || 0), 0);
-    const totalExpenses = projects.reduce((sum, p) => sum + (p.totalExpenses || 0), 0);
-    const activeProjects = projects.filter(p => p.status === 'In Corso').length;
-    const completedProjects = projects.filter(p => p.status === 'Completato').length;
+    const totalBudget = filteredProjects.reduce((sum, p) => sum + (p.budget || 0), 0);
+    const totalExpenses = filteredProjects.reduce((sum, p) => sum + (p.totalExpenses || 0), 0);
+    const activeProjects = filteredProjects.filter(p => p.status === 'In Corso').length;
+    const completedProjects = filteredProjects.filter(p => p.status === 'Completato').length;
 
     return {
       totalBudget,
@@ -59,16 +67,16 @@ const Dashboard: React.FC<DashboardProps> = ({ projects }) => {
       activeProjects,
       completedProjects
     };
-  }, [projects]);
+  }, [filteredProjects]);
 
   const chartData = useMemo(() => {
-    return projects.slice(0, 6).map(project => ({
+    return filteredProjects.slice(0, 6).map(project => ({
       name: project.name.length > 15 ? project.name.substring(0, 15) + '...' : project.name,
       budget: project.budget || 0,
     }));
-  }, [projects]);
+  }, [filteredProjects]);
 
-  const pieData = projects.length > 0 ? [
+  const pieData = filteredProjects.length > 0 ? [
     { name: 'Materiali', value: 400, color: '#3b82f6' },
     { name: 'Manodopera', value: 300, color: '#10b981' },
     { name: 'Noleggi', value: 150, color: '#f59e0b' },

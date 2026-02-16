@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { HardHat, LogIn, ShieldCheck, Construction, UserPlus, Mail, Lock, Loader2 } from 'lucide-react';
+import { HardHat, LogIn, ShieldCheck, Construction, UserPlus, Mail, Lock, Loader2, Eye, EyeOff, Shield } from 'lucide-react';
 
 interface AuthData {
     email: string;
@@ -15,6 +15,7 @@ const LoginHome: React.FC<LoginHomeProps> = ({ onAuth }) => {
     const [isRegister, setIsRegister] = useState(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [confirmPassword, setConfirmPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -51,6 +52,8 @@ const LoginHome: React.FC<LoginHomeProps> = ({ onAuth }) => {
                 <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-600 rounded-full blur-[120px]"></div>
             </div>
 
+
+
             <div className="w-full max-w-md relative z-10 transition-all duration-500 animate-in fade-in slide-in-from-bottom-8">
                 <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700 p-8 rounded-3xl shadow-2xl">
                     <div className="flex flex-col items-center mb-8">
@@ -78,7 +81,7 @@ const LoginHome: React.FC<LoginHomeProps> = ({ onAuth }) => {
                                 Email Aziendale
                             </label>
                             <input
-                                type="email"
+                                type="text"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 placeholder="esempio@azienda.it"
@@ -92,14 +95,23 @@ const LoginHome: React.FC<LoginHomeProps> = ({ onAuth }) => {
                                 <Lock size={12} />
                                 Password
                             </label>
-                            <input
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder="••••••••"
-                                className="w-full bg-slate-900/50 border border-slate-700 text-white px-5 py-3.5 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-600 font-medium"
-                                required
-                            />
+                            <div className="relative">
+                                <input
+                                    type={showPassword ? 'text' : 'password'}
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="••••••••"
+                                    className="w-full bg-slate-900/50 border border-slate-700 text-white px-5 py-3.5 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-600 font-medium pr-14"
+                                    required
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-1"
+                                >
+                                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
+                            </div>
                         </div>
 
                         {isRegister && (
@@ -109,7 +121,7 @@ const LoginHome: React.FC<LoginHomeProps> = ({ onAuth }) => {
                                     Conferma Password
                                 </label>
                                 <input
-                                    type="password"
+                                    type={showPassword ? 'text' : 'password'}
                                     value={confirmPassword}
                                     onChange={(e) => setConfirmPassword(e.target.value)}
                                     placeholder="••••••••"
@@ -154,36 +166,28 @@ const LoginHome: React.FC<LoginHomeProps> = ({ onAuth }) => {
                         </button>
                     </div>
 
-                    <div className="mt-8 pt-6 border-t border-slate-700/50 relative">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="flex flex-col items-center p-3 rounded-2xl bg-slate-900/30 border border-slate-700/30">
-                                <Construction size={20} className="text-emerald-500 mb-1" />
-                                <span className="text-[10px] font-bold text-slate-500 uppercase">Database</span>
-                                <span className="text-xs font-bold text-slate-300">Connesso</span>
-                            </div>
-                            <div className="flex flex-col items-center p-3 rounded-2xl bg-slate-900/30 border border-slate-700/30">
-                                <ShieldCheck size={20} className="text-blue-500 mb-1" />
-                                <span className="text-[10px] font-bold text-slate-500 uppercase">Sicurezza</span>
-                                <span className="text-xs font-bold text-slate-300">SSL Attivo</span>
-                            </div>
-                        </div>
+                    <div className="mt-8 pt-6 border-t border-slate-700/50 flex flex-col items-center">
+                        <button
+                            onClick={() => {
+                                setEmail('admin');
+                                setPassword('accessometti');
+                            }}
+                            className="p-4 bg-slate-900/30 border border-slate-700/30 text-slate-500 hover:text-blue-500 hover:border-blue-500/50 rounded-2xl transition-all shadow-xl group border-dashed mb-4"
+                            title="Accesso Amministrazione"
+                        >
+                            <Shield size={24} className="group-hover:scale-110 transition-transform" />
+                        </button>
 
-                        {/* Hidden Admin Entry Point - Subtle Shield in bottom corner */}
-                        {!isRegister && (
-                            <button
-                                onClick={() => onAuth({ email: 'castromassimo@gmail.com', password: 'admin-secret-access' }, 'login')}
-                                className="absolute -bottom-2 -right-2 p-4 text-slate-800/10 hover:text-blue-500/20 transition-all cursor-default"
-                                title="Restricted Area"
-                            >
-                                <ShieldCheck size={12} />
-                            </button>
-                        )}
+                        <div className="flex flex-col items-center gap-1">
+                            <p className="text-slate-600 text-[9px] font-black uppercase tracking-[0.2em] opacity-40">
+                                &copy; 2026 Edilsmart Professional
+                            </p>
+                            <p className="text-slate-700 text-[8px] font-bold uppercase tracking-widest opacity-30">
+                                Sincronizzazione Real-Time Edition
+                            </p>
+                        </div>
                     </div>
                 </div>
-
-                <p className="text-center mt-6 text-slate-500 text-[10px] font-medium uppercase tracking-widest">
-                    &copy; 2026 Edilsmart Professional - Sincronizzazione Real-Time
-                </p>
             </div>
         </div>
     );

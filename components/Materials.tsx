@@ -4,11 +4,23 @@ import { Package, TrendingUp, Search, Calendar, FileText, ArrowUpRight, ArrowDow
 
 interface MaterialsProps {
     projects: Project[];
+    globalExpenses?: Expense[];
     selectedProjectId: string;
     onUpdateProject?: (project: Project) => void;
+    onAddExpense?: (projectId: string | null, expense: Omit<Expense, 'id'>) => Promise<any>;
+    onUpdateExpense?: (expense: any) => Promise<void>;
+    onDeleteExpense?: (expenseId: string, projectId?: string) => Promise<void>;
 }
 
-const Materials: React.FC<MaterialsProps> = ({ projects, selectedProjectId, onUpdateProject }) => {
+const Materials: React.FC<MaterialsProps> = ({
+    projects,
+    globalExpenses,
+    selectedProjectId,
+    onUpdateProject,
+    onAddExpense,
+    onUpdateExpense,
+    onDeleteExpense
+}) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedProjectFilter, setSelectedProjectFilter] = useState(selectedProjectId || '');
     const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
@@ -30,6 +42,7 @@ const Materials: React.FC<MaterialsProps> = ({ projects, selectedProjectId, onUp
     const materialTransactions = useMemo(() => {
         let allExpenses: (Expense & { projectName: string })[] = [];
 
+        // 1. All project expenses
         const projectsToScan = selectedProjectFilter
             ? projects.filter(p => p.id === selectedProjectFilter)
             : projects;
@@ -43,9 +56,18 @@ const Materials: React.FC<MaterialsProps> = ({ projects, selectedProjectId, onUp
             }
         });
 
+        // 2. Global expenses (if no project filter or specifically filtered for global)
+        // Here we assume global expenses show up when no specific project is filtered
+        if (!selectedProjectFilter && globalExpenses) {
+            const globalMaterials = globalExpenses
+                .filter(e => e.category === 'Materiali')
+                .map(e => ({ ...e, projectName: 'Generale/Altro' }));
+            allExpenses = [...allExpenses, ...globalMaterials];
+        }
+
         // Sort by date desc
         return allExpenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [projects, selectedProjectFilter]);
+    }, [projects, globalExpenses, selectedProjectFilter]);
 
     // Filter by search term and date
     const filteredTransactions = useMemo(() => {
@@ -100,105 +122,57 @@ const Materials: React.FC<MaterialsProps> = ({ projects, selectedProjectId, onUp
         setIsMaterialModalOpen(true);
     };
 
-    const handleDeleteMaterial = (t: any) => {
-        if (!confirm('Sei sicuro di voler eliminare questa spesa?')) return;
-        if (!onUpdateProject) return;
-
-        const project = projects.find(p => p.id === t.projectId);
-        if (!project) return;
-
-        const amountAbs = Math.abs(t.amount);
-        const updatedExpenses = project.expenses?.filter(e => e.id !== t.id) || [];
-
-        onUpdateProject({
-            ...project,
-            expenses: updatedExpenses,
-            totalExpenses: (project.totalExpenses || 0) - amountAbs
-        });
-    };
-
-    const handleSaveMaterial = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newMaterial.amount || !onUpdateProject || !newMaterial.projectId) return;
-
-        const amountVal = parseFloat(newMaterial.amount);
-        const descriptionComplete = `Materiale: ${newMaterial.description || 'Nessuna descrizione'} ${newMaterial.supplier ? `(${newMaterial.supplier})` : ''}`;
-
-        if (editingState) {
-            const originalProject = projects.find(p => p.id === editingState.originalProjectId);
-            const targetProject = projects.find(p => p.id === newMaterial.projectId);
-
-            if (originalProject && targetProject) {
-                const updatedExpense: Expense = {
-                    id: editingState.id,
-                    date: newMaterial.date,
-                    description: descriptionComplete,
-                    amount: -amountVal,
-                    category: 'Materiali',
-                    status: 'Pagato',
-                    projectId: targetProject.id,
-                    paymentType: (newMaterial.paymentMethod as any) || 'Bonifico'
-                };
-
-                // Same Project
-                if (originalProject.id === targetProject.id) {
-                    const oldExpense = originalProject.expenses?.find(e => e.id === editingState.id);
-                    const oldAmountAbs = oldExpense ? Math.abs(oldExpense.amount) : 0;
-                    const updatedExpenses = originalProject.expenses?.map(e =>
-                        e.id === editingState.id ? updatedExpense : e
-                    ) || [];
-
-                    onUpdateProject({
-                        ...originalProject,
-                        expenses: updatedExpenses,
-                        totalExpenses: (originalProject.totalExpenses || 0) - oldAmountAbs + amountVal
-                    });
-                }
-                // Changed Project
-                else {
-                    const oldExpense = originalProject.expenses?.find(e => e.id === editingState.id);
-                    const oldAmountAbs = oldExpense ? Math.abs(oldExpense.amount) : 0;
-                    const originalExpenses = originalProject.expenses?.filter(e => e.id !== editingState.id) || [];
-
-                    onUpdateProject({
-                        ...originalProject,
-                        expenses: originalExpenses,
-                        totalExpenses: (originalProject.totalExpenses || 0) - oldAmountAbs
-                    });
-
-                    const targetExpenses = [...(targetProject.expenses || []), updatedExpense];
-                    onUpdateProject({
-                        ...targetProject,
-                        expenses: targetExpenses,
-                        totalExpenses: (targetProject.totalExpenses || 0) + amountVal
-                    });
-                }
-            }
-        } else {
-            // New Creation
-            const project = projects.find(p => p.id === newMaterial.projectId);
-            if (project) {
-                const transaction: Expense = {
-                    id: Math.random().toString(36).substr(2, 9),
-                    date: newMaterial.date,
-                    description: descriptionComplete,
-                    amount: -amountVal, // Negative
-                    category: 'Materiali',
-                    status: 'Pagato',
-                    projectId: project.id,
-                    paymentType: (newMaterial.paymentMethod as any) || 'Bonifico'
-                };
-
-                const updatedExpenses = [...(project.expenses || []), transaction];
-                onUpdateProject({
-                    ...project,
-                    expenses: updatedExpenses,
-                    totalExpenses: (project.totalExpenses || 0) + amountVal
-                });
+    const handleDeleteMaterial = async (id: string, projectId: string) => {
+        if (confirm('Sei sicuro di voler eliminare questa spesa materiale?')) {
+            if (onDeleteExpense) {
+                await onDeleteExpense(id, projectId);
             }
         }
-        handleCloseModal();
     };
+
+    const handleSaveMaterial = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newMaterial.amount || !newMaterial.projectId) return;
+
+        const amountVal = parseFloat(newMaterial.amount);
+        const descriptionComplete = `${newMaterial.description || 'Nessuna descrizione'} ${newMaterial.supplier ? `(${newMaterial.supplier})` : ''}`;
+
+        try {
+            if (editingState) {
+                if (onUpdateExpense) {
+                    const updatedExpense: Expense = {
+                        id: editingState.id,
+                        date: newMaterial.date,
+                        description: descriptionComplete,
+                        amount: -amountVal,
+                        category: 'Materiali',
+                        status: 'Pagato',
+                        projectId: newMaterial.projectId, // Use newMaterial.projectId for potential project change
+                        paymentType: (newMaterial.paymentMethod as any) || 'Bonifico'
+                    };
+                    await onUpdateExpense(updatedExpense);
+                }
+            } else {
+                // New Creation using the database service
+                if (onAddExpense) {
+                    const expenseData: Omit<Expense, 'id'> = {
+                        date: newMaterial.date,
+                        description: descriptionComplete,
+                        amount: -amountVal,
+                        category: 'Materiali',
+                        status: 'Pagato',
+                        projectId: newMaterial.projectId,
+                        paymentType: (newMaterial.paymentMethod as any) || 'Bonifico'
+                    };
+                    await onAddExpense(newMaterial.projectId, expenseData);
+                }
+            }
+            handleCloseModal();
+        } catch (err) {
+            console.error("Error saving material:", err);
+        }
+    };
+
 
     const handlePrint = () => {
         window.print();
@@ -361,7 +335,7 @@ const Materials: React.FC<MaterialsProps> = ({ projects, selectedProjectId, onUp
                                                     <button onClick={() => handleEditClick(t)} className="text-blue-600 hover:text-blue-800 p-1 hover:bg-blue-50 rounded" title="Modifica">
                                                         <Edit2 size={16} />
                                                     </button>
-                                                    <button onClick={() => handleDeleteMaterial(t)} className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded" title="Elimina">
+                                                    <button onClick={() => handleDeleteMaterial(t.id, t.projectId || '')} className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded" title="Elimina">
                                                         <Trash2 size={16} />
                                                     </button>
                                                 </div>
@@ -383,8 +357,8 @@ const Materials: React.FC<MaterialsProps> = ({ projects, selectedProjectId, onUp
             {/* Material Modal */}
             {isMaterialModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-                    <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-                        <div className="p-6 border-b flex justify-between items-center bg-blue-50">
+                    <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+                        <div className="p-6 border-b flex justify-between items-center bg-blue-50 flex-shrink-0">
                             <h3 className="text-lg font-bold text-slate-800 flex items-center">
                                 <Package className="mr-2 text-blue-600" size={20} />
                                 {editingState ? 'Modifica Spesa' : 'Registra Acquisto Materiale'}
@@ -397,106 +371,108 @@ const Materials: React.FC<MaterialsProps> = ({ projects, selectedProjectId, onUp
                             </button>
                         </div>
 
-                        <form onSubmit={handleSaveMaterial} className="p-6 space-y-4">
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-500 uppercase">Cantiere</label>
-                                <select
-                                    required
-                                    className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                                    value={newMaterial.projectId}
-                                    onChange={(e) => setNewMaterial({ ...newMaterial, projectId: e.target.value })}
-                                >
-                                    <option value="">Seleziona un cantiere</option>
-                                    {projects.map(p => (
-                                        <option key={p.id} value={p.id}>{p.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-500 uppercase">Data</label>
-                                <input
-                                    type="date"
-                                    required
-                                    className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                                    value={newMaterial.date}
-                                    onChange={(e) => setNewMaterial({ ...newMaterial, date: e.target.value })}
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-500 uppercase">Importo (€)</label>
-                                <div className="relative">
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
+                        <div className="flex-1 overflow-y-auto">
+                            <form onSubmit={handleSaveMaterial} className="p-6 space-y-4">
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-slate-500 uppercase">Cantiere</label>
+                                    <select
                                         required
-                                        placeholder="0.00"
-                                        className="w-full pl-8 pr-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                                        value={newMaterial.amount}
-                                        onChange={(e) => setNewMaterial({ ...newMaterial, amount: e.target.value })}
-                                    />
-                                    <Euro className="absolute left-2.5 top-2.5 text-slate-400" size={14} />
+                                        className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                                        value={newMaterial.projectId}
+                                        onChange={(e) => setNewMaterial({ ...newMaterial, projectId: e.target.value })}
+                                    >
+                                        <option value="">Seleziona un cantiere</option>
+                                        {projects.map(p => (
+                                            <option key={p.id} value={p.id}>{p.name}</option>
+                                        ))}
+                                    </select>
                                 </div>
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-500 uppercase">Metodo di Pagamento</label>
-                                <select
-                                    className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                                    value={newMaterial.paymentMethod}
-                                    onChange={(e) => setNewMaterial({ ...newMaterial, paymentMethod: e.target.value })}
-                                >
-                                    <option value="Bonifico">Bonifico</option>
-                                    <option value="Carta di Credito">Carta di Credito</option>
-                                    <option value="Contanti">Contanti</option>
-                                    <option value="Assegno">Assegno</option>
-                                    <option value="RiBa">RiBa</option>
-                                </select>
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-500 uppercase">Fornitore (Opzionale)</label>
-                                <input
-                                    type="text"
-                                    placeholder="Es: Leroy Merlin"
-                                    className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                                    value={newMaterial.supplier}
-                                    onChange={(e) => setNewMaterial({ ...newMaterial, supplier: e.target.value })}
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-500 uppercase">Descrizione</label>
-                                <input
-                                    type="text"
-                                    required
-                                    placeholder="Es: Cemento, mattoni, etc."
-                                    className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                                    value={newMaterial.description}
-                                    onChange={(e) => setNewMaterial({ ...newMaterial, description: e.target.value })}
-                                />
-                            </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-slate-500 uppercase">Data</label>
+                                    <input
+                                        type="date"
+                                        required
+                                        className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                                        value={newMaterial.date}
+                                        onChange={(e) => setNewMaterial({ ...newMaterial, date: e.target.value })}
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-slate-500 uppercase">Importo (€)</label>
+                                    <div className="relative">
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            required
+                                            placeholder="0.00"
+                                            className="w-full pl-8 pr-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                                            value={newMaterial.amount}
+                                            onChange={(e) => setNewMaterial({ ...newMaterial, amount: e.target.value })}
+                                        />
+                                        <Euro className="absolute left-2.5 top-2.5 text-slate-400" size={14} />
+                                    </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-slate-500 uppercase">Metodo di Pagamento</label>
+                                    <select
+                                        className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                                        value={newMaterial.paymentMethod}
+                                        onChange={(e) => setNewMaterial({ ...newMaterial, paymentMethod: e.target.value })}
+                                    >
+                                        <option value="Bonifico">Bonifico</option>
+                                        <option value="Carta di Credito">Carta di Credito</option>
+                                        <option value="Contanti">Contanti</option>
+                                        <option value="Assegno">Assegno</option>
+                                        <option value="RiBa">RiBa</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-slate-500 uppercase">Fornitore (Opzionale)</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Es: Leroy Merlin"
+                                        className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                                        value={newMaterial.supplier}
+                                        onChange={(e) => setNewMaterial({ ...newMaterial, supplier: e.target.value })}
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-slate-500 uppercase">Descrizione</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        placeholder="Es: Cemento, mattoni, etc."
+                                        className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                                        value={newMaterial.description}
+                                        onChange={(e) => setNewMaterial({ ...newMaterial, description: e.target.value })}
+                                    />
+                                </div>
 
-                            <div className="bg-blue-50 p-4 rounded-xl flex items-start space-x-3 border border-blue-100 mt-2">
-                                <TrendingUp className="text-blue-600 mt-0.5" size={18} />
-                                <p className="text-xs text-blue-800 leading-relaxed">
-                                    Questa spesa verrà registrata automaticamente nella contabilità del cantiere selezionato.
-                                </p>
-                            </div>
+                                <div className="bg-blue-50 p-4 rounded-xl flex items-start space-x-3 border border-blue-100 mt-2">
+                                    <TrendingUp className="text-blue-600 mt-0.5" size={18} />
+                                    <p className="text-xs text-blue-800 leading-relaxed">
+                                        Questa spesa verrà registrata automaticamente nella contabilità del cantiere selezionato.
+                                    </p>
+                                </div>
 
-                            <div className="flex gap-3 pt-4">
-                                <button
-                                    type="button"
-                                    onClick={handleCloseModal}
-                                    className="flex-1 px-4 py-3 border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors"
-                                >
-                                    Annulla
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="flex-1 px-4 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all active:scale-95"
-                                >
-                                    {editingState ? 'Salva Modifiche' : 'Registra Spesa'}
-                                </button>
-                            </div>
-                        </form>
+                                <div className="flex gap-3 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={handleCloseModal}
+                                        className="flex-1 px-4 py-3 border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors"
+                                    >
+                                        Annulla
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="flex-1 px-4 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all active:scale-95"
+                                    >
+                                        {editingState ? 'Salva Modifiche' : 'Salva Spesa'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
                 </div>
             )}
@@ -568,7 +544,7 @@ const Materials: React.FC<MaterialsProps> = ({ projects, selectedProjectId, onUp
                     <span>Pagina 1 di 1</span>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

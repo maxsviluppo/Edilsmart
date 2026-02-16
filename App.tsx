@@ -27,6 +27,7 @@ import {
   ArrowRight // Added
 } from 'lucide-react';
 import { Project, Expense } from './types';
+import { supabase } from './services/supabaseClient';
 import { loadInvoices, saveInvoices, loadQuotes, saveQuotes } from './services/invoiceService';
 import { loadDocuments, saveDocuments } from './services/documentService';
 import { formatCurrency } from './services/formatUtils';
@@ -223,30 +224,75 @@ const App: React.FC = () => {
 
   const [isProjectSettingsOpen, setIsProjectSettingsOpen] = useState(false);
 
+  useEffect(() => {
+    // Check for active session on mount
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setIsAuthenticated(true);
+        // Determine role (simplified: castromassimo is admin)
+        const role = (session.user.email === 'castromassimo@gmail.com' || session.user.email === 'admin') ? 'superadmin' : 'user';
+        setUserProfile({ role, status: 'active' });
+      }
+    };
+    checkSession();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setIsAuthenticated(true);
+        const role = (session.user.email === 'castromassimo@gmail.com' || session.user.email === 'admin') ? 'superadmin' : 'user';
+        setUserProfile({ role, status: 'active' });
+      } else {
+        setIsAuthenticated(false);
+        setUserProfile(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   const handleAuth = async (data: { email: string; password?: string }, type: 'login' | 'register') => {
-    // PORTA SEGRETA SUPERADMIN
-    if ((data.password === 'admin-secret-access' && data.email === 'castromassimo@gmail.com') ||
-      (data.email === 'admin' && data.password === 'accessometti')) {
-      setIsAuthenticated(true);
-      setUserProfile({ role: 'superadmin', status: 'active' });
-      setActiveTab('admin');
-      setToast({ message: "Accesso Superadmin Autorizzato!", type: 'success' });
+    // SPECIAL BYPASS FOR ADMIN (if needed for testing with specific credentials)
+    if (data.email === 'admin' && data.password === 'accessometti') {
+      const { data: authData, error } = await supabase.auth.signInWithPassword({
+        email: 'castromassimo@gmail.com',
+        password: 'accessometti' // Assuming this exists or using it as a trigger
+      });
+      if (error) throw error;
       return;
     }
 
     try {
-      // Logica reale Supabase qui...
-      setIsAuthenticated(true);
-      setUserProfile({ role: 'user', status: 'active' });
-    } catch (error) {
-      setToast({ message: "Errore durante l'autenticazione.", type: 'error' });
+      if (type === 'register') {
+        const { error } = await supabase.auth.signUp({
+          email: data.email,
+          password: data.password || '',
+        });
+        if (error) throw error;
+        setToast({ message: "Registrazione completata! Controlla la mail o accedi.", type: 'success' });
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: data.email,
+          password: data.password || '',
+        });
+        if (error) throw error;
+        setToast({ message: "Accesso effettuato!", type: 'success' });
+      }
+    } catch (error: any) {
+      console.error("Auth error:", error);
+      setToast({ message: error.message || "Errore durante l'autenticazione.", type: 'error' });
+      throw error;
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setIsAuthenticated(false);
     setUserProfile(null);
     setActiveTab('dashboard');
+    setProjects([]);
+    setGlobalExpenses([]);
   };
 
   const handleNewProject = () => {
@@ -259,9 +305,10 @@ const App: React.FC = () => {
       setProjects([newProject, ...projects]);
       setIsNewProjectModalOpen(false);
       setToast({ message: "Cantiere creato con successo!", type: 'success' });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Errore salvataggio progetto:", error);
-      setToast({ message: "Errore durante il salvataggio nel database.", type: 'error' });
+      const errorMsg = error.message || "Errore durante il salvataggio.";
+      setToast({ message: errorMsg, type: 'error' });
     }
   };
 

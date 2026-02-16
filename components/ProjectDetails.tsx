@@ -26,10 +26,21 @@ interface ProjectDetailsProps {
     project: Project;
     onNavigate: (tab: string) => void;
     onOpenSettings: () => void;
-    onUpdateProject?: (project: Project) => void; // Optional to avoid breaking other usages immediately
+    onUpdateProject: (project: Project) => void;
+    onAddExpense: (projectId: string | null, expense: any) => Promise<any>;
+    onUpdateExpense: (expense: any) => Promise<void>;
+    onDeleteExpense: (expenseId: string, projectId?: string) => Promise<void>;
 }
 
-const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, onNavigate, onOpenSettings, onUpdateProject }) => {
+const ProjectDetails: React.FC<ProjectDetailsProps> = ({
+    project,
+    onNavigate,
+    onOpenSettings,
+    onUpdateProject,
+    onAddExpense,
+    onUpdateExpense,
+    onDeleteExpense
+}) => {
     const [monthlyNotes, setMonthlyNotes] = useState<Record<string, string>>({});
     const [isEditingNote, setIsEditingNote] = useState(false);
     const [tempNote, setTempNote] = useState('');
@@ -75,39 +86,28 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, onNavigate, on
         setIsEditingNote(false);
     };
 
-    const handleAddAcconto = (e: React.FormEvent) => {
+    const handleAddAcconto = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newAcconto.amount || !onUpdateProject) return;
+        if (!newAcconto.amount) return;
 
         const amount = parseFloat(newAcconto.amount);
+        const expenseToEdit = project.expenses?.find(e => e.id === editingId);
 
-        // Handle Edit or Create
-        if (editingId) {
-            const updatedExpenses = (project.expenses || []).map(exp => {
-                if (exp.id === editingId) {
-                    return {
-                        ...exp,
-                        date: newAcconto.date,
-                        description: `Acconto Cantiere: ${newAcconto.description || 'Nessuna descrizione'}`,
-                        amount: amount,
-                    };
-                }
-                return exp;
-            });
-
-            onUpdateProject({ ...project, expenses: updatedExpenses });
-        } else {
-            const transaction = {
-                id: Math.random().toString(36).substr(2, 9),
+        if (editingId && expenseToEdit) {
+            await onUpdateExpense({
+                ...expenseToEdit,
                 date: newAcconto.date,
-                description: `Acconto Cantiere: ${newAcconto.description || 'Nessuna descrizione'}`,
-                amount: amount, // Positive for Revenue
+                description: `${newAcconto.description || 'Acconto'}`,
+                amount: amount,
+            });
+        } else {
+            await onAddExpense(project.id, {
+                date: newAcconto.date,
+                description: `${newAcconto.description || 'Acconto'}`,
+                amount: amount,
                 category: 'Ricavi',
-                status: 'Pagato' as const,
-                projectId: project.id
-            };
-            const updatedExpenses = [...(project.expenses || []), transaction];
-            onUpdateProject({ ...project, expenses: updatedExpenses });
+                status: 'Pagato'
+            });
         }
 
         setIsAccontoModalOpen(false);
@@ -121,7 +121,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, onNavigate, on
         if (t.category === 'Ricavi' || t.amount > 0) {
             setNewAcconto({
                 amount: Math.abs(t.amount).toString(),
-                description: t.description.replace('Acconto Cantiere: ', ''),
+                description: t.description.replace(/^Acconto Cantiere:\s*/i, ''),
                 date: t.date
             });
             setIsAccontoModalOpen(true);
@@ -130,19 +130,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, onNavigate, on
 
     const handleDeleteTransaction = (id: string) => {
         if (!confirm('Sei sicuro di voler eliminare questa registrazione?')) return;
-        if (!onUpdateProject) return;
-
-        const exp = project.expenses?.find(e => e.id === id);
-        const amountAbs = exp ? Math.abs(exp.amount) : 0;
-        const isExpense = exp && exp.amount < 0;
-
-        const updatedExpenses = (project.expenses || []).filter(e => e.id !== id);
-
-        onUpdateProject({
-            ...project,
-            expenses: updatedExpenses,
-            totalExpenses: isExpense ? (project.totalExpenses || 0) - amountAbs : (project.totalExpenses || 0)
-        });
+        onDeleteExpense(id, project.id);
     };
 
     const handlePrint = () => {

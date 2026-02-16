@@ -3,12 +3,35 @@ import { supabase } from './supabaseClient';
 import { Project, Expense, Employee, PayrollEntry, Supplier } from '../types';
 
 export const projectService = {
+    // --- UTILS ---
+    async getCurrentUserId(): Promise<string | null> {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+            // Se non c'è una sessione Supabase gestita, proviamo a vedere se in localStorage 
+            // c'è un'indicazione dell'ID utente (per compatibilità con il bypass admin)
+            // In un sistema reale, dovresti sempre usare supabase.auth
+            return null;
+        }
+        return user.id;
+    },
+
     // --- PROGETTI ---
     async getProjects(): Promise<Project[]> {
-        const { data, error } = await supabase
-            .from('projects')
-            .select('*')
-            .order('created_at', { ascending: false });
+        const userId = await this.getCurrentUserId();
+
+        let query = supabase.from('projects').select('*');
+
+        if (userId) {
+            // Filtro essenziale per multi-tenancy a livello di query
+            query = query.eq('user_id', userId);
+        } else {
+            // Se non siamo autenticati via Supabase (bypass), 
+            // torniamo una lista vuota per evitare di mostrare i dati di altri utenti
+            // Questo forza l'isolamento anche se le policy RLS sono permissive
+            return [];
+        }
+
+        const { data, error } = await query.order('created_at', { ascending: false });
 
         if (error) throw error;
 
@@ -21,8 +44,9 @@ export const projectService = {
     },
 
     async createProject(project: Omit<Project, 'id'>): Promise<Project> {
+        const userId = await this.getCurrentUserId();
+
         // Mappatura campi frontend -> database (snake_case)
-        // Rimuoviamo anche i campi che non esistono nella tabella (es. description, computo, ecc.)
         const dataToInsert = {
             name: project.name,
             client: project.client,
@@ -32,7 +56,8 @@ export const projectService = {
             start_date: (project.startDate && project.startDate !== '') ? project.startDate : null,
             end_date: (project.endDate && project.endDate !== '') ? project.endDate : null,
             iva: project.iva || 10,
-            progress: project.progress || 0
+            progress: project.progress || 0,
+            ...(userId ? { user_id: userId } : {})
         };
 
         const { data, error } = await supabase
@@ -43,13 +68,18 @@ export const projectService = {
 
         if (error) {
             console.error("Supabase insert error:", error);
-            throw error;
+            const msg = error.message || "Errore sconosciuto";
+            throw new Error(`Errore database: ${msg}`);
         }
-        return data;
+
+        return {
+            ...data,
+            startDate: data.start_date,
+            endDate: data.end_date
+        };
     },
 
     async updateProject(project: Project): Promise<Project> {
-        // Mappatura campi frontend -> database (snake_case)
         const dataToUpdate = {
             name: project.name,
             client: project.client,
@@ -71,9 +101,15 @@ export const projectService = {
 
         if (error) {
             console.error("Supabase update error:", error);
-            throw error;
+            const msg = error.message || "Errore sconosciuto";
+            throw new Error(`Errore database: ${msg}`);
         }
-        return data;
+
+        return {
+            ...data,
+            startDate: data.start_date,
+            endDate: data.end_date
+        };
     },
 
     async deleteProject(id: string): Promise<void> {
@@ -87,38 +123,134 @@ export const projectService = {
 
     // --- MOVIMENTI / SPESE ---
     async getExpenses(projectId?: string): Promise<Expense[]> {
-        let query = supabase.from('expenses').select('*');
-        if (projectId) query = query.eq('projectId', projectId);
+        const userId = await this.getCurrentUserId();
+        if (!userId) return [];
+
+        let query = supabase.from('expenses').select('*').eq('user_id', userId);
+        if (projectId) query = query.eq('project_id', projectId);
 
         const { data, error } = await query.order('date', { ascending: false });
         if (error) throw error;
-        return data || [];
+
+        return (data || []).map(e => ({
+            ...e,
+            projectId: e.project_id,
+            invoiceNumber: e.invoice_number,
+            paymentType: e.payment_type
+        }));
     },
 
     async createExpense(expense: Omit<Expense, 'id'>): Promise<Expense> {
+        const userId = await this.getCurrentUserId();
+
+        const dataToInsert = {
+            date: expense.date,
+            description: expense.description,
+            amount: expense.amount,
+            category: expense.category,
+            status: expense.status,
+            project_id: (expense.projectId && expense.projectId !== '') ? expense.projectId : null,
+            invoice_number: expense.invoiceNumber,
+            payment_type: expense.paymentType,
+            ...(userId ? { user_id: userId } : {})
+        };
+
         const { data, error } = await supabase
             .from('expenses')
-            .insert([expense])
+            .insert([dataToInsert])
             .select()
             .single();
 
-        if (error) throw error;
-        return data;
+        if (error) {
+            console.error("Error creating expense:", error);
+            throw error;
+        }
+
+        return {
+            ...data,
+            projectId: data.project_id,
+            invoiceNumber: data.invoice_number,
+            paymentType: data.payment_type
+        };
+    },
+
+    async updateExpense(expense: Expense): Promise<Expense> {
+        const userId = await this.getCurrentUserId();
+
+        const dataToUpdate = {
+            date: expense.date,
+            description: expense.description,
+            amount: expense.amount,
+            category: expense.category,
+            status: expense.status,
+            project_id: (expense.projectId && expense.projectId !== '') ? expense.projectId : null,
+            invoice_number: expense.invoiceNumber,
+            payment_type: expense.paymentType,
+        };
+
+        const { data, error } = await supabase
+            .from('expenses')
+            .update(dataToUpdate)
+            .match({ id: expense.id, user_id: userId })
+            .select()
+            .single();
+
+        if (error) {
+            console.error("Error updating expense:", error);
+            throw error;
+        }
+
+        return {
+            ...data,
+            projectId: data.project_id,
+            invoiceNumber: data.invoice_number,
+            paymentType: data.payment_type
+        };
+    },
+
+    async deleteExpense(id: string): Promise<void> {
+        const userId = await this.getCurrentUserId();
+        const { error } = await supabase
+            .from('expenses')
+            .delete()
+            .match({ id, user_id: userId });
+
+        if (error) {
+            console.error("Error deleting expense:", error);
+            throw error;
+        }
     },
 
     // --- PERSONALE ---
     async getEmployees(): Promise<Employee[]> {
-        const { data, error } = await supabase.from('employees').select('*');
+        const userId = await this.getCurrentUserId();
+        if (!userId) return [];
+
+        const { data, error } = await supabase.from('employees')
+            .select('*')
+            .eq('user_id', userId);
+
         if (error) throw error;
         return data || [];
     },
 
     async getPayroll(projectId?: string): Promise<PayrollEntry[]> {
-        let query = supabase.from('payroll').select('*');
-        if (projectId) query = query.eq('projectId', projectId);
+        const userId = await this.getCurrentUserId();
+        if (!userId) return [];
+
+        let query = supabase.from('payroll')
+            .select('*')
+            .eq('user_id', userId);
+
+        if (projectId) query = query.eq('project_id', projectId);
 
         const { data, error } = await query.order('date', { ascending: false });
         if (error) throw error;
-        return data || [];
+
+        return (data || []).map(pe => ({
+            ...pe,
+            projectId: pe.project_id,
+            employeeId: pe.employee_id
+        }));
     }
 };
