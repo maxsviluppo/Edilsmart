@@ -19,8 +19,10 @@ import {
     Package,
     Trash2,
     Plus,
-    Printer
+    Printer,
+    Library // Added
 } from 'lucide-react';
+import ProjectFiles from './ProjectFiles';
 
 interface ProjectDetailsProps {
     project: Project;
@@ -207,6 +209,13 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
             icon: TrendingUp,
             color: 'purple',
             description: 'Report e analisi'
+        },
+        {
+            id: 'documents',
+            label: 'Archivio File',
+            icon: Library,
+            color: 'emerald',
+            description: 'Foto e documenti tecnici'
         }
     ];
 
@@ -519,6 +528,9 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
                     </table>
                 </div>
             </div>
+
+            {/* Archivio File Section */}
+            <ProjectFiles projectId={project.id} />
 
             {/* Quick Actions */}
             <div className="print:hidden">
