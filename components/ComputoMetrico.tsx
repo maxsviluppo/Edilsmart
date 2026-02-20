@@ -110,10 +110,11 @@ const ComputoMetrico: React.FC<ComputoMetricoProps> = ({ project }) => {
     setRows(prev => prev.map(r => {
       if (r.id === id) {
         const updated = { ...r, [field]: value };
-        // Recalculate total if price changes
-        if (field === 'price') {
-          const price = typeof value === 'number' ? value : parseFloat(value) || 0;
-          updated.total = parseFloat((updated.quantity * price).toFixed(2));
+        // Recalculate total if price or quantity changes
+        if (field === 'price' || field === 'quantity') {
+          const price = field === 'price' ? (typeof value === 'number' ? value : parseFloat(value) || 0) : r.price;
+          const quantity = field === 'quantity' ? (typeof value === 'number' ? value : parseFloat(value) || 0) : r.quantity;
+          updated.total = parseFloat((quantity * price).toFixed(2));
         }
         return updated;
       }
@@ -177,12 +178,11 @@ const ComputoMetrico: React.FC<ComputoMetricoProps> = ({ project }) => {
         const w = newDims.larg || 0;
         const h = newDims.h_peso || 0;
 
-        let qty = 0;
+        let qty = r.quantity;
         const hasDimensions = l > 0 || w > 0 || h > 0;
+
         if (hasDimensions) {
           qty = p * (l !== 0 ? l : 1) * (w !== 0 ? w : 1) * (h !== 0 ? h : 1);
-        } else {
-          qty = p;
         }
 
         return {
@@ -484,7 +484,17 @@ const ComputoMetrico: React.FC<ComputoMetricoProps> = ({ project }) => {
 
                   {/* Quantity */}
                   <td className="border-r border-emerald-600/50 p-2 text-right font-bold align-top">
-                    {row.quantity ? row.quantity.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                    <input
+                      type="number"
+                      className="w-full text-right bg-transparent focus:bg-emerald-50 outline-none print:hidden font-bold text-slate-900"
+                      placeholder="0.00"
+                      value={row.quantity || ''}
+                      onChange={(e) => updateRow(row.id, 'quantity', parseFloat(e.target.value) || 0)}
+                      step="0.01"
+                    />
+                    <div className="hidden print:block">
+                      {row.quantity ? row.quantity.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                    </div>
                   </td>
 
                   {/* Unit Price - Now Editable */}
