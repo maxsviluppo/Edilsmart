@@ -582,6 +582,76 @@ const Payroll: React.FC<PayrollProps> = ({ projects, selectedProjectId }) => {
                 </div>
             </div>
 
+            {/* Estratto Conto Paghe */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col h-[500px] overflow-hidden print:hidden">
+                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                    <div>
+                        <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2">
+                            <Euro className="text-blue-600" size={20} />
+                            Estratto Conto Paghe Progressive
+                        </h3>
+                        <p className="text-xs text-slate-500">Riepilogo cronologico di tutte le paghe erogate</p>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Gran Totale Paghe</p>
+                        <p className="text-2xl font-black text-blue-700">€ {totalFilteredAmount.toLocaleString('it-IT', { minimumFractionDigits: 2 })}</p>
+                    </div>
+                </div>
+                <div className="overflow-y-auto flex-1">
+                    <table className="w-full text-left text-sm border-separate border-spacing-0">
+                        <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] sticky top-0 z-10 shadow-sm">
+                            <tr>
+                                <th className="px-6 py-3 border-b border-slate-100">Data</th>
+                                <th className="px-6 py-3 border-b border-slate-100">Dipendente</th>
+                                <th className="px-6 py-3 border-b border-slate-100">Cantiere</th>
+                                <th className="px-6 py-3 border-b border-slate-100">Note</th>
+                                <th className="px-6 py-3 border-b border-slate-100 text-right">Importo</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {filteredEntriesForReport.length > 0 ? (
+                                filteredEntriesForReport.map((e) => (
+                                    <tr key={e.id} className="hover:bg-blue-50/30 transition-colors group">
+                                        <td className="px-6 py-4 text-slate-500 font-mono text-xs whitespace-nowrap">
+                                            {new Date(e.date).toLocaleDateString('it-IT')}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="font-bold text-slate-800">
+                                                {employees.find(emp => emp.id === e.employeeId)?.name || 'Sconosciuto'}
+                                            </div>
+                                            <div className="text-[10px] text-slate-400 italic">
+                                                {employees.find(emp => emp.id === e.employeeId)?.role || '-'}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-1.5 text-slate-600">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-blue-400"></div>
+                                                {projects?.find(p => p.id === e.projectId)?.name || 'Generale'}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 text-slate-400 italic text-xs max-w-[200px] truncate">
+                                            {e.notes || '-'}
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <span className="font-black text-slate-900 bg-slate-100 px-2 py-1 rounded-md">
+                                                € {(e.amount || 0).toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan={5} className="px-6 py-20 text-center text-slate-400 italic bg-slate-50/30">
+                                        <Users size={40} className="mx-auto mb-3 opacity-20" />
+                                        Nessuna paga registrata per i criteri selezionati
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
 
             {/* Add Employee Modal */}
             {isAddingEmployee && (
