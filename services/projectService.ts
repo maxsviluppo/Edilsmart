@@ -5,14 +5,8 @@ import { Project, Expense, Employee, PayrollEntry, Supplier } from '../types';
 export const projectService = {
     // --- UTILS ---
     async getCurrentUserId(): Promise<string | null> {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-            // Se non c'è una sessione Supabase gestita, proviamo a vedere se in localStorage 
-            // c'è un'indicazione dell'ID utente (per compatibilità con il bypass admin)
-            // In un sistema reale, dovresti sempre usare supabase.auth
-            return null;
-        }
-        return user.id;
+        const { data: { session } } = await supabase.auth.getSession();
+        return session?.user?.id || null;
     },
 
     // --- PROGETTI ---
@@ -43,8 +37,8 @@ export const projectService = {
         }));
     },
 
-    async createProject(project: Omit<Project, 'id'>): Promise<Project> {
-        const userId = await this.getCurrentUserId();
+    async createProject(project: Omit<Project, 'id'>, explicitUserId?: string): Promise<Project> {
+        const userId = explicitUserId || await this.getCurrentUserId();
 
         // Mappatura campi frontend -> database (snake_case)
         const dataToInsert = {
@@ -63,8 +57,7 @@ export const projectService = {
         const { data, error } = await supabase
             .from('projects')
             .insert([dataToInsert])
-            .select()
-            .single();
+            .select();
 
         if (error) {
             console.error("Supabase insert error:", error);
@@ -72,10 +65,11 @@ export const projectService = {
             throw new Error(`Errore database: ${msg}`);
         }
 
+        const saved = data![0];
         return {
-            ...data,
-            startDate: data.start_date,
-            endDate: data.end_date
+            ...saved,
+            startDate: saved.start_date,
+            endDate: saved.end_date
         };
     },
 

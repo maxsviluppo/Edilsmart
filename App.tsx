@@ -53,6 +53,7 @@ import Statistics from './components/Statistics';
 import PriceListManager from './components/PriceListManager';
 import ProjectDetails from './components/ProjectDetails';
 import ProjectSettings from './components/ProjectSettings';
+import Estimates from './components/Estimates';
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -62,6 +63,7 @@ const App: React.FC = () => {
   const [globalExpenses, setGlobalExpenses] = useState<Expense[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
+  const [modalInitialType, setModalInitialType] = useState<'In Corso' | 'Preventivo'>('In Corso');
   const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [invoicesAction, setInvoicesAction] = useState<string | undefined>(undefined);
@@ -252,6 +254,14 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (activeTab === 'new-computo') {
+      setModalInitialType('Preventivo');
+      setIsNewProjectModalOpen(true);
+      setActiveTab('estimates');
+    }
+  }, [activeTab]);
+
   const handleAuth = async (data: { email: string; password?: string }, type: 'login' | 'register') => {
     // SPECIAL BYPASS FOR ADMIN (if needed for testing with specific credentials)
     if (data.email === 'admin' && data.password === 'accessometti') {
@@ -295,35 +305,55 @@ const App: React.FC = () => {
     setGlobalExpenses([]);
   };
 
-  const handleNewProject = () => {
+  const handleNewProject = (type: 'In Corso' | 'Preventivo' = 'In Corso') => {
+    setModalInitialType(type);
     setIsNewProjectModalOpen(true);
   };
 
-  const handleSaveProject = async (projectData: Omit<Project, 'id'>) => {
+  const handleSaveProject = async (projectData: any) => {
+    setIsLoading(true);
     try {
-      const newProject = await projectService.createProject(projectData);
-      setProjects([newProject, ...projects]);
-      setIsNewProjectModalOpen(false);
+      const newProject = await projectService.createProject(projectData, userProfile?.id);
+      setProjects(prev => [newProject, ...prev]);
       setToast({ message: "Cantiere creato con successo!", type: 'success' });
+      return Promise.resolve();
     } catch (error: any) {
       console.error("Errore salvataggio progetto:", error);
       const errorMsg = error.message || "Errore durante il salvataggio.";
-      setToast({ message: errorMsg, type: 'error' });
+      setToast({ message: `Errore: ${errorMsg}`, type: 'error' });
+      throw error;
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleUpdateProject = async (updatedProject: Project) => {
+    setIsLoading(true);
     try {
       const saved = await projectService.updateProject(updatedProject);
-      setProjects(projects.map(p => p.id === saved.id ? saved : p));
+      setProjects(prev => prev.map(p => p.id === saved.id ? saved : p));
+      setToast({ message: "Progetto aggiornato correttamente", type: 'success' });
     } catch (error) {
       console.error("Errore nell'aggiornamento del progetto:", error);
+      setToast({ message: "Errore durante l'aggiornamento", type: 'error' });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
+        return <Dashboard
+          projects={projects}
+          selectedProjectId={selectedProjectId}
+          onSelectProject={(id, tab) => {
+            setSelectedProjectId(id);
+            setActiveTab(tab);
+          }}
+        />;
+      case 'new-computo':
+        // Questo tab apre solo il modal e poi torna alla dashboard o archivio
         return <Dashboard projects={projects} selectedProjectId={selectedProjectId} />;
       case 'cronoprogramma':
         return <Cronoprogramma project={projects.find(p => p.id === selectedProjectId)} />;
@@ -393,7 +423,7 @@ const App: React.FC = () => {
               <div className="flex justify-center items-center py-20">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
               </div>
-            ) : projects.length === 0 ? (
+            ) : projects.filter(p => p.status === 'In Corso' || p.status === 'Completato').length === 0 ? (
               <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-slate-300">
                 <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
                   <Building2 size={40} />
@@ -410,56 +440,58 @@ const App: React.FC = () => {
             ) : (
               <>
                 <div className="grid grid-cols-1 gap-4 mb-8">
-                  {projects.map(project => (
-                    <div key={project.id}
-                      className={`bg-white rounded-xl border p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 cursor-pointer transition-all hover:shadow-md ${selectedProjectId === project.id ? 'border-emerald-500 ring-2 ring-emerald-100 shadow-md' : 'border-slate-200'}`}
-                      onClick={() => setSelectedProjectId(project.id)}
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-lg font-bold text-slate-800">{project.name}</h3>
-                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${project.status === 'In Corso' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' :
-                            project.status === 'Completato' ? 'bg-blue-50 border-blue-100 text-blue-700' :
-                              'bg-slate-50 border-slate-100 text-slate-700'
-                            }`}>
-                            {project.status}
-                          </span>
+                  {projects
+                    .filter(p => p.status === 'In Corso' || p.status === 'Completato')
+                    .map(project => (
+                      <div key={project.id}
+                        className={`bg-white rounded-xl border p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 cursor-pointer transition-all hover:shadow-md ${selectedProjectId === project.id ? 'border-emerald-500 ring-2 ring-emerald-100 shadow-md' : 'border-slate-200'}`}
+                        onClick={() => setSelectedProjectId(project.id)}
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h3 className="text-lg font-bold text-slate-800">{project.name}</h3>
+                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${project.status === 'In Corso' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' :
+                              project.status === 'Completato' ? 'bg-blue-50 border-blue-100 text-blue-700' :
+                                'bg-slate-50 border-slate-100 text-slate-700'
+                              }`}>
+                              {project.status}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-6 text-sm text-slate-500 flex-wrap">
+                            <div className="flex items-center gap-1">
+                              <User size={14} />
+                              {project.client}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Calendar size={14} />
+                              Inizio: {new Date(project.startDate || '').toLocaleDateString('it-IT')}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Euro size={14} />
+                              {project.budget?.toLocaleString('it-IT')} €
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-6 text-sm text-slate-500 flex-wrap">
-                          <div className="flex items-center gap-1">
-                            <User size={14} />
-                            {project.client}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Calendar size={14} />
-                            Inizio: {new Date(project.startDate || '').toLocaleDateString('it-IT')}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Euro size={14} />
-                            {project.budget?.toLocaleString('it-IT')} €
-                          </div>
-                        </div>
-                      </div>
 
-                      <div className="flex items-center gap-6 w-full md:w-auto">
-                        <div className="flex-1 md:w-48">
-                          <div className="flex justify-between text-xs mb-1">
-                            <span className="text-slate-500 font-medium">Avanzamento</span>
-                            <span className="text-slate-700 font-bold">{project.progress || 0}%</span>
+                        <div className="flex items-center gap-6 w-full md:w-auto">
+                          <div className="flex-1 md:w-48">
+                            <div className="flex justify-between text-xs mb-1">
+                              <span className="text-slate-500 font-medium">Avanzamento</span>
+                              <span className="text-slate-700 font-bold">{project.progress || 0}%</span>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                              <div
+                                className="bg-emerald-600 h-full rounded-full transition-all duration-500"
+                                style={{ width: `${project.progress || 0}%` }}
+                              ></div>
+                            </div>
                           </div>
-                          <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                            <div
-                              className="bg-emerald-600 h-full rounded-full transition-all duration-500"
-                              style={{ width: `${project.progress || 0}%` }}
-                            ></div>
-                          </div>
+                          <button className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg text-sm font-semibold transition-colors">
+                            Visualizza
+                          </button>
                         </div>
-                        <button className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg text-sm font-semibold transition-colors">
-                          Visualizza
-                        </button>
                       </div>
-                    </div>
-                  ))}
+                    ))}
                 </div>
               </>
             )}
@@ -479,6 +511,26 @@ const App: React.FC = () => {
             setInvoicesAction('new-quote');
             setTimeout(() => setInvoicesAction(undefined), 100);
           }}
+        />;
+      case 'estimates':
+        return <Estimates
+          projects={projects}
+          onUpdateProject={handleUpdateProject}
+          onSelectProject={(id, tab) => {
+            setSelectedProjectId(id);
+            if (tab) setActiveTab(tab);
+          }}
+          onNewEstimate={() => setIsNewProjectModalOpen(true)}
+          onDeleteProject={async (id) => {
+            try {
+              await projectService.deleteProject(id);
+              setProjects(prev => prev.filter(p => p.id !== id));
+              setToast({ message: "Preventivo eliminato", type: 'success' });
+            } catch (error) {
+              setToast({ message: "Errore eliminazione", type: 'error' });
+            }
+          }}
+          isLoading={isLoading}
         />;
       case 'documents':
         return <Documents selectedProjectId={selectedProjectId} projects={projects} />;
@@ -507,12 +559,18 @@ const App: React.FC = () => {
       userRole={userProfile?.role}
     >
       {renderContent()}
-      <NewProjectModal
-        isOpen={isNewProjectModalOpen}
-        onClose={() => setIsNewProjectModalOpen(false)}
-        onSave={handleSaveProject}
-      />
-      {selectedProjectId && isProjectSettingsOpen && (
+      {isNewProjectModalOpen && (
+        <NewProjectModal
+          isOpen={isNewProjectModalOpen}
+          onClose={() => {
+            setIsNewProjectModalOpen(false);
+            setModalInitialType('In Corso'); // Reset to default
+          }}
+          onSave={handleSaveProject}
+          initialType={modalInitialType}
+          isLoading={isLoading}
+        />
+      )}{selectedProjectId && isProjectSettingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
           <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl overflow-y-auto p-6 relative animate-in fade-in zoom-in duration-200">
             <ProjectSettings

@@ -35,7 +35,7 @@ export interface Project {
   client: string;
   location?: string;
   budget: number;
-  status: 'In Corso' | 'Completato' | 'Preventivo' | 'In attesa' | 'Pianificato';
+  status: 'In Corso' | 'Completato' | 'Preventivo' | 'In attesa' | 'Pianificato' | 'Perso';
   startDate?: string;
   endDate?: string;
   duration?: number; // Durata in giorni

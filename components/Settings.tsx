@@ -76,20 +76,21 @@ const Settings: React.FC = () => {
         localStorage.setItem('accounting_categories', JSON.stringify(accountingCategories));
         // Dispatch event so other components update immediately if listening
         window.dispatchEvent(new Event('company-settings-updated'));
-        alert("Impostazioni salvate correttamente!");
+        setToast({ message: "Impostazioni salvate correttamente!", type: 'success' });
     };
 
     const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
             if (file.size > 1024 * 1024) { // 1MB
-                alert("Il file è troppo grande! Max 1MB.");
+                setToast({ message: "Il file è troppo grande! Max 1MB.", type: 'error' });
                 return;
             }
 
             const reader = new FileReader();
             reader.onloadend = () => {
                 setSettings(prev => ({ ...prev, logoUrl: reader.result as string }));
+                setToast({ message: "Logo aggiornato correttamente!", type: 'success' });
             };
             reader.readAsDataURL(file);
         }
@@ -98,7 +99,7 @@ const Settings: React.FC = () => {
     const addUnitMeasurement = () => {
         if (!newUnit.trim()) return;
         if (unitMeasurements.includes(newUnit.trim())) {
-            alert("Questa unità di misura esiste già!");
+            setToast({ message: "Questa unità di misura esiste già!", type: 'error' });
             return;
         }
         setUnitMeasurements([...unitMeasurements, newUnit.trim()]);
@@ -113,7 +114,7 @@ const Settings: React.FC = () => {
     const addAccountingCategory = () => {
         if (!newCategory.trim()) return;
         if (accountingCategories.includes(newCategory.trim())) {
-            alert("Questa categoria esiste già!");
+            setToast({ message: "Questa categoria esiste già!", type: 'error' });
             return;
         }
         setAccountingCategories([...accountingCategories, newCategory.trim()]);
@@ -128,7 +129,7 @@ const Settings: React.FC = () => {
     const editAccountingCategory = (oldCategory: string, newName: string) => {
         if (!newName.trim() || newName === oldCategory) return;
         if (accountingCategories.includes(newName.trim())) {
-            alert("Questa categoria esiste già!");
+            setToast({ message: "Questa categoria esiste già!", type: 'error' });
             return;
         }
         setAccountingCategories(accountingCategories.map(c => c === oldCategory ? newName.trim() : c));

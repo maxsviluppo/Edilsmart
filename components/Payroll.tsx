@@ -129,7 +129,11 @@ const Payroll: React.FC<PayrollProps> = ({ projects, selectedProjectId }) => {
 
     const getEntry = (empId: string, day: number) => {
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        return entries.find(e => e.employeeId === empId && e.date === dateStr);
+        return entries.find(e =>
+            e.employeeId === empId &&
+            e.date === dateStr &&
+            (!selectedProjectFilter || e.projectId === selectedProjectFilter)
+        );
     };
 
     const handleCellClick = (empId: string, day: number) => {
@@ -146,12 +150,14 @@ const Payroll: React.FC<PayrollProps> = ({ projects, selectedProjectId }) => {
     const handleSaveEntry = (empId: string, day: number, value: string) => {
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
-        // Parse the Italian format (replace . with nothing and , with .)
+        // Parse the Italian format
         const cleanValue = value.replace(/\./g, '').replace(/,/g, '.');
         const amount = parseFloat(cleanValue);
 
-        let updatedEntries = [...entries];
-        updatedEntries = updatedEntries.filter(e => !(e.employeeId === empId && e.date === dateStr));
+        // Filter out existing entry for this emp/date/project to replace it
+        let updatedEntries = entries.filter(e =>
+            !(e.employeeId === empId && e.date === dateStr && (!selectedProjectFilter || e.projectId === selectedProjectFilter))
+        );
 
         if (!isNaN(amount) && amount > 0) {
             updatedEntries.push({
@@ -159,7 +165,7 @@ const Payroll: React.FC<PayrollProps> = ({ projects, selectedProjectId }) => {
                 employeeId: empId,
                 date: dateStr,
                 amount,
-                projectId: selectedProject || undefined,
+                projectId: selectedProjectFilter || undefined,
                 notes: entryNote
             });
         }
@@ -219,26 +225,27 @@ const Payroll: React.FC<PayrollProps> = ({ projects, selectedProjectId }) => {
             let sum = 0;
             entries.forEach(entry => {
                 const entryDate = new Date(entry.date);
-                if (entry.employeeId === emp.id && entryDate.getMonth() === month && entryDate.getFullYear() === year) {
+                const matchesProject = !selectedProjectFilter || entry.projectId === selectedProjectFilter;
+                if (entry.employeeId === emp.id && entryDate.getMonth() === month && entryDate.getFullYear() === year && matchesProject) {
                     sum += entry.amount || 0;
                 }
             });
             totals[emp.id] = sum;
         });
         return totals;
-    }, [entries, employees, month, year]);
+    }, [entries, employees, month, year, selectedProjectFilter]);
 
     const dailyTotals = useMemo(() => {
         const totals: Record<number, number> = {};
         for (let d = 1; d <= daysInMonth; d++) {
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
             const sum = entries
-                .filter(e => e.date === dateStr)
+                .filter(e => e.date === dateStr && (!selectedProjectFilter || e.projectId === selectedProjectFilter))
                 .reduce((acc, curr) => acc + (curr.amount || 0), 0);
             totals[d] = sum;
         }
         return totals;
-    }, [entries, month, year, daysInMonth]);
+    }, [entries, month, year, daysInMonth, selectedProjectFilter]);
 
     const grandTotal = Object.values(employeeTotals).reduce((a, b) => a + b, 0);
 

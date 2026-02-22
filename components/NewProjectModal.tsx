@@ -5,10 +5,12 @@ import { Project } from '../types';
 interface NewProjectModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (project: Project) => void;
+    onSave: (project: any) => Promise<void>;
+    initialType?: 'In Corso' | 'Preventivo';
+    isLoading?: boolean;
 }
 
-const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSave }) => {
+const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSave, initialType, isLoading }) => {
     const [formData, setFormData] = useState({
         name: '',
         client: '',
@@ -18,47 +20,57 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
         endDate: '',
         ivaSelection: '10',
         ivaCustom: '',
-        description: ''
+        description: '',
+        type: initialType || 'In Corso' as 'In Corso' | 'Preventivo'
     });
 
     if (!isOpen) return null;
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formData.name || !formData.client) {
-            alert("Compila almeno Nome e Cliente");
+        if (!formData.name) {
+            alert("Inserisci almeno il Nome del Progetto o Condominio");
             return;
         }
 
-        const newProject: Project = {
-            id: Math.random().toString(36).substr(2, 9),
+        const clientName = formData.client.trim() || "Potenziale Cliente";
+
+        // Mappatura tipo per il salvataggio (escludiamo ID perché lo genera il DB)
+        const projectToSave: any = {
             name: formData.name,
-            client: formData.client,
+            client: clientName,
             location: formData.location,
             budget: parseFloat(formData.budget.replace(/\./g, '')) || 0,
             startDate: formData.startDate,
             endDate: formData.endDate,
             iva: formData.ivaSelection === 'custom' ? (parseFloat(formData.ivaCustom) || 0) : parseInt(formData.ivaSelection),
             description: formData.description,
-            status: 'Pianificato',
+            status: formData.type,
             progress: 0,
             computo: [],
             expenses: []
         };
 
-        onSave(newProject);
-        setFormData({
-            name: '',
-            client: '',
-            location: '',
-            budget: '',
-            startDate: new Date().toISOString().split('T')[0],
-            endDate: '',
-            ivaSelection: '10',
-            ivaCustom: '',
-            description: ''
-        });
-        onClose();
+        try {
+            await onSave(projectToSave);
+            // Il reset e la chiusura avvengono solo se onSave va a buon fine
+            setFormData({
+                name: '',
+                client: '',
+                location: '',
+                budget: '',
+                startDate: new Date().toISOString().split('T')[0],
+                endDate: '',
+                ivaSelection: '10',
+                ivaCustom: '',
+                description: '',
+                type: 'In Corso'
+            });
+            onClose();
+        } catch (error) {
+            // L'errore viene gestito dal toast in App.tsx, qui giriamo solo il caricamento
+            console.error("Errore durante il salvataggio nel modal:", error);
+        }
     };
 
     return (
@@ -67,7 +79,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
                 <div className="bg-slate-900 px-6 py-4 flex justify-between items-center text-white">
                     <h2 className="text-xl font-bold flex items-center">
                         <Building className="mr-2" size={24} />
-                        Nuovo Cantiere
+                        {formData.type === 'Preventivo' ? 'Nuovo Computo Metrico' : 'Nuovo Cantiere Attivo'}
                     </h2>
                     <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
                         <X size={24} />
@@ -75,6 +87,23 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    <div className="flex bg-slate-100 p-1 rounded-xl gap-1">
+                        <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, type: 'In Corso' })}
+                            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${formData.type === 'In Corso' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            Cantiere Attivo
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, type: 'Preventivo' })}
+                            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${formData.type === 'Preventivo' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            Preventivo / Studio
+                        </button>
+                    </div>
+
                     <div>
                         <label className="block text-sm font-semibold text-slate-700 mb-1">Nome Progetto *</label>
                         <div className="relative">
@@ -91,13 +120,13 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-1">Cliente *</label>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1">Cliente / Condominio (Opzionale)</label>
                         <div className="relative">
                             <input
                                 type="text"
                                 required
                                 className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all capitalize"
-                                placeholder="Nome committente..."
+                                placeholder="Nome committente o condominio..."
                                 value={formData.client}
                                 onChange={e => setFormData({ ...formData, client: e.target.value })}
                             />
@@ -213,12 +242,27 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
                     </div>
 
                     <div className="pt-4 flex gap-3">
-                        <button type="button" onClick={onClose} className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition-colors">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            disabled={isLoading}
+                            className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+                        >
                             Annulla
                         </button>
-                        <button type="submit" className="flex-1 px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 shadow-lg shadow-emerald-900/20 transition-all flex justify-center items-center">
-                            <Save size={18} className="mr-2" />
-                            Crea Progetto
+                        <button
+                            type="submit"
+                            disabled={isLoading}
+                            className="flex-1 px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 shadow-lg shadow-emerald-900/20 transition-all flex justify-center items-center disabled:opacity-70"
+                        >
+                            {isLoading ? (
+                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                            ) : (
+                                <>
+                                    <Save size={18} className="mr-2" />
+                                    {formData.type === 'Preventivo' ? 'Salva Computo' : 'Crea Progetto'}
+                                </>
+                            )}
                         </button>
                     </div>
                 </form>

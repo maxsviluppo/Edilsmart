@@ -19,7 +19,8 @@ import {
   FileCheck,
   Package,
   LogOut,
-  ShieldCheck
+  ShieldCheck,
+  LayoutTemplate
 } from 'lucide-react';
 import { Project } from '../types';
 
@@ -56,6 +57,8 @@ const Layout: React.FC<LayoutProps> = ({
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'new-computo', label: 'Nuovo Computo Metrico', icon: Plus },
+    { id: 'estimates', label: 'Archivio Preventivi', icon: LayoutTemplate },
     { id: 'projects', label: 'Cantieri', icon: HardHat },
     { id: 'cronoprogramma', label: 'Cronoprogramma', icon: GanttChart },
     { id: 'materials', label: 'Materiale', icon: Package },
@@ -129,7 +132,10 @@ const Layout: React.FC<LayoutProps> = ({
                 }}
               >
                 <option value="">Tutti i cantieri</option>
-                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                {projects
+                  .filter(p => p.status !== 'Preventivo' && p.status !== 'Perso')
+                  .map(p => <option key={p.id} value={p.id}>{p.name}</option>)
+                }
               </select>
               <Folder size={18} className="absolute left-3 top-3 text-slate-400 group-hover:text-blue-400 transition-colors" />
               <ChevronDown size={16} className="absolute right-3 top-3.5 text-slate-400 pointer-events-none" />
