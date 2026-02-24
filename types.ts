@@ -396,4 +396,5 @@ export interface PayrollEntry {
   hours?: number;
   projectId?: string; // Optional: associated project
   notes?: string;
+  isAbsent?: boolean;
 }

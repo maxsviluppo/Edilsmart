@@ -127,6 +127,12 @@ const Payroll: React.FC<PayrollProps> = ({ projects, selectedProjectId }) => {
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const monthName = currentDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' });
 
+    const isWeekend = (d: number) => {
+        const date = new Date(year, month, d);
+        const dow = date.getDay();
+        return dow === 0 || dow === 6;
+    };
+
     const getEntry = (empId: string, day: number) => {
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         return entries.find(e =>
@@ -136,7 +142,29 @@ const Payroll: React.FC<PayrollProps> = ({ projects, selectedProjectId }) => {
         );
     };
 
-    const handleCellClick = (empId: string, day: number) => {
+    const handleToggleAbsent = (empId: string, day: number) => {
+        const entry = getEntry(empId, day);
+        if (entry && !entry.isAbsent) return; // Don't override an entered amount with single click
+
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        let updatedEntries = entries.filter(e =>
+            !(e.employeeId === empId && e.date === dateStr && (!selectedProjectFilter || e.projectId === selectedProjectFilter))
+        );
+
+        if (!entry?.isAbsent) {
+            updatedEntries.push({
+                id: Math.random().toString(36).substr(2, 9),
+                employeeId: empId,
+                date: dateStr,
+                isAbsent: true,
+                projectId: selectedProjectFilter || undefined
+            });
+        }
+
+        saveEntries(updatedEntries);
+    };
+
+    const handleCellDoubleClick = (empId: string, day: number) => {
         const entry = getEntry(empId, day);
         setSelectedCell({ empId, day });
         // Format with thousand separator for the input
@@ -397,7 +425,7 @@ const Payroll: React.FC<PayrollProps> = ({ projects, selectedProjectId }) => {
                             Operai
                         </div>
                         {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => (
-                            <div key={day} className="p-2 bg-slate-50 border-b border-r border-slate-200 text-center text-xs font-semibold text-slate-600">
+                            <div key={day} className={`p-2 border-b border-r border-slate-200 text-center text-xs font-semibold ${isWeekend(day) ? 'bg-red-100 text-red-700' : 'bg-slate-50 text-slate-600'}`}>
                                 {day}
                             </div>
                         ))}
@@ -432,10 +460,13 @@ const Payroll: React.FC<PayrollProps> = ({ projects, selectedProjectId }) => {
                                 return (
                                     <div
                                         key={day}
-                                        onClick={() => handleCellClick(emp.id, day)}
+                                        onClick={() => handleToggleAbsent(emp.id, day)}
+                                        onDoubleClick={() => handleCellDoubleClick(emp.id, day)}
                                         className={`
-                                    border-b border-r border-slate-100 text-center text-xs flex items-center justify-center cursor-pointer select-none h-10
-                                    ${entry ? 'bg-blue-50 text-blue-700 font-medium' : 'hover:bg-slate-50'}
+                                    border-b border-r border-slate-100 text-center text-xs flex items-center justify-center cursor-pointer select-none h-10 transition-colors
+                                    ${entry?.isAbsent ? 'bg-slate-300 text-slate-700 shadow-inner' :
+                                                entry?.amount ? 'bg-blue-50 text-blue-700 font-medium' :
+                                                    isWeekend(day) ? 'bg-red-50 text-red-600 font-medium hover:bg-red-100' : 'hover:bg-slate-50'}
                                     ${selectedCell?.empId === emp.id && selectedCell?.day === day ? 'ring-2 ring-blue-500 z-20 bg-white' : ''}
                                 `}
                                     >
