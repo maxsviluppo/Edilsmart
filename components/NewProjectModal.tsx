@@ -21,7 +21,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
         ivaSelection: '10',
         ivaCustom: '',
         description: '',
-        type: initialType || 'In Corso' as 'In Corso' | 'Preventivo'
+        type: (initialType || 'In Corso') as 'In Corso' | 'Preventivo'
     });
 
     if (!isOpen) return null;
@@ -124,7 +124,6 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
                         <div className="relative">
                             <input
                                 type="text"
-                                required
                                 className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all capitalize"
                                 placeholder="Nome committente o condominio..."
                                 value={formData.client}

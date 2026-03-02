@@ -46,7 +46,7 @@ export const projectService = {
             client: project.client,
             location: project.location,
             budget: project.budget || 0,
-            status: project.status || 'Pianificato',
+            status: project.status || 'In Corso',
             start_date: (project.startDate && project.startDate !== '') ? project.startDate : null,
             end_date: (project.endDate && project.endDate !== '') ? project.endDate : null,
             iva: project.iva || 10,

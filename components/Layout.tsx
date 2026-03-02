@@ -28,7 +28,7 @@ interface LayoutProps {
   children: React.ReactNode;
   activeTab: string;
   setActiveTab: (tab: string) => void;
-  onNewProject: () => void;
+  onNewProject: (type?: 'In Corso' | 'Preventivo') => void;
   projects: Project[];
   selectedProjectId: string;
   onProjectSelect: (id: string) => void;
@@ -146,7 +146,7 @@ const Layout: React.FC<LayoutProps> = ({
         {/* Primary Action Button */}
         <div className="p-4 pb-2">
           <button
-            onClick={onNewProject}
+            onClick={() => onNewProject('In Corso')}
             className={`w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center justify-center transition-all shadow-lg shadow-emerald-900/20 group 
               ${(isSidebarOpen || isMobileSidebarOpen) ? 'px-4 py-3' : 'p-3 aspect-square'}`}
             title="Crea Nuovo Cantiere"
@@ -200,7 +200,7 @@ const Layout: React.FC<LayoutProps> = ({
           </h1>
           <div className="flex items-center space-x-4">
             <button
-              onClick={onNewProject}
+              onClick={() => onNewProject('In Corso')}
               className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg flex items-center shadow-sm text-sm font-medium hover:shadow-md transition-all active:scale-95"
             >
               <Plus size={18} className="mr-2" />

@@ -26,7 +26,7 @@ import {
   Briefcase, // Added
   ArrowRight // Added
 } from 'lucide-react';
-import { Project, Expense } from './types';
+import { Project, Expense, PayrollEntry, Employee } from './types';
 import { supabase } from './services/supabaseClient';
 import { loadInvoices, saveInvoices, loadQuotes, saveQuotes } from './services/invoiceService';
 import { loadDocuments, saveDocuments } from './services/documentService';
@@ -57,7 +57,7 @@ import Estimates from './components/Estimates';
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userProfile, setUserProfile] = useState<{ role: string; status: string } | null>(null);
+  const [userProfile, setUserProfile] = useState<{ id: string; role: string; status: string } | null>(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [projects, setProjects] = useState<Project[]>([]);
   const [globalExpenses, setGlobalExpenses] = useState<Expense[]>([]);
@@ -85,27 +85,68 @@ const App: React.FC = () => {
       const fetchProjects = async () => {
         setIsLoading(true);
         try {
-          const [projectsData, expensesData] = await Promise.all([
+          const [projectsData, expensesData, payrollData, employeesData] = await Promise.all([
             projectService.getProjects(),
-            projectService.getExpenses()
+            projectService.getExpenses(),
+            projectService.getPayroll(),
+            projectService.getEmployees()
           ]);
 
-          // Filtriamo le spese globali (senza progetto associato)
-          const globalExpenses = expensesData.filter(e => !e.projectId);
+          // Carichiamo anche dati da localStorage per compatibilità finché non migrati tutti su Supabase
+          const localPayrollStr = localStorage.getItem('edilsmart_payroll_entries');
+          const localPayroll: PayrollEntry[] = localPayrollStr ? JSON.parse(localPayrollStr) : [];
 
-          // Distribuiamo le spese ai rispettivi progetti
-          const projectsWithExpenses = projectsData.map(p => ({
-            ...p,
-            expenses: expensesData.filter(e => e.projectId === p.id),
-            totalExpenses: expensesData
-              .filter(e => e.projectId === p.id)
-              .reduce((sum, e) => sum + Math.abs(e.amount), 0)
-          }));
+          const localEmployeesStr = localStorage.getItem('edilsmart_employees');
+          const localEmployees: Employee[] = localEmployeesStr ? JSON.parse(localEmployeesStr) : [];
+
+          // Fondiamo i dati (Supabase ha la precedenza in caso di ID duplicati)
+          const combinedPayroll = [...(payrollData || [])];
+          localPayroll.forEach(lp => {
+            if (!combinedPayroll.some(pe => pe.id === lp.id)) {
+              combinedPayroll.push(lp);
+            }
+          });
+
+          const combinedEmployees = [...(employeesData || [])];
+          localEmployees.forEach(le => {
+            if (!combinedEmployees.some(e => e.id === le.id)) {
+              combinedEmployees.push(le);
+            }
+          });
+
+          // Filtriamo le spese globali (senza progetto associato)
+          const globalExpensesData = expensesData.filter(e => !e.projectId);
+
+          // Distribuiamo le spese ai rispettivi progetti includendo le paghe operai come 'Manodopera'
+          const projectsWithExpenses = projectsData.map(p => {
+            const projectExpenses = expensesData.filter(e => e.projectId === p.id);
+
+            // Convertiamo le voci paghe in spese virtuali per il calcolo dashboard
+            const projectPayroll = combinedPayroll
+              .filter(pe => pe.projectId === p.id)
+              .map(pe => ({
+                id: `payroll_${pe.id}`,
+                date: pe.date,
+                description: `Paga: ${combinedEmployees.find(emp => emp.id === pe.employeeId)?.name || 'Operaio'}`,
+                amount: -(pe.amount || 0),
+                category: 'Manodopera',
+                status: 'Pagato' as const,
+                projectId: p.id
+              }));
+
+            const allProjectExpenses = [...projectExpenses, ...projectPayroll];
+
+            return {
+              ...p,
+              expenses: allProjectExpenses,
+              totalExpenses: allProjectExpenses.reduce((sum, e) => sum + Math.abs(e.amount), 0)
+            };
+          });
 
           setProjects(projectsWithExpenses);
-          setGlobalExpenses(globalExpenses);
+          setGlobalExpenses(globalExpensesData);
           // Memorizziamo le spese globali in localStorage per Accounting (retrocompatibilità)
-          localStorage.setItem('global_transactions', JSON.stringify(globalExpenses));
+          localStorage.setItem('global_transactions', JSON.stringify(globalExpensesData));
         } catch (error) {
           console.error("Errore nel caricamento dei dati:", error);
         } finally {
@@ -113,6 +154,19 @@ const App: React.FC = () => {
         }
       };
       fetchProjects();
+
+      // Refresh on payroll or accounting updates
+      const handleDataUpdate = () => {
+        fetchProjects();
+      };
+
+      window.addEventListener('payroll-updated', handleDataUpdate);
+      window.addEventListener('accounting-updated', handleDataUpdate);
+
+      return () => {
+        window.removeEventListener('payroll-updated', handleDataUpdate);
+        window.removeEventListener('accounting-updated', handleDataUpdate);
+      };
     }
   }, [isAuthenticated]);
 
@@ -234,7 +288,7 @@ const App: React.FC = () => {
         setIsAuthenticated(true);
         // Determine role (simplified: castromassimo is admin)
         const role = (session.user.email === 'castromassimo@gmail.com' || session.user.email === 'admin') ? 'superadmin' : 'user';
-        setUserProfile({ role, status: 'active' });
+        setUserProfile({ id: session.user.id, role, status: 'active' });
       }
     };
     checkSession();
@@ -244,7 +298,7 @@ const App: React.FC = () => {
       if (session?.user) {
         setIsAuthenticated(true);
         const role = (session.user.email === 'castromassimo@gmail.com' || session.user.email === 'admin') ? 'superadmin' : 'user';
-        setUserProfile({ role, status: 'active' });
+        setUserProfile({ id: session.user.id, role, status: 'active' });
       } else {
         setIsAuthenticated(false);
         setUserProfile(null);
@@ -306,7 +360,9 @@ const App: React.FC = () => {
   };
 
   const handleNewProject = (type: 'In Corso' | 'Preventivo' = 'In Corso') => {
-    setModalInitialType(type);
+    // Se passiamo un evento (click diretto), forziamo 'In Corso'
+    const finalType = (typeof type === 'string' && (type === 'In Corso' || type === 'Preventivo')) ? type : 'In Corso';
+    setModalInitialType(finalType);
     setIsNewProjectModalOpen(true);
   };
 
@@ -411,7 +467,7 @@ const App: React.FC = () => {
                 <p className="text-slate-500">Gestisci i lavori e monitora l'avanzamento</p>
               </div>
               <button
-                onClick={handleNewProject}
+                onClick={() => handleNewProject('In Corso')}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-emerald-100 transition-all active:scale-95"
               >
                 <Plus size={20} />
@@ -431,7 +487,7 @@ const App: React.FC = () => {
                 <h3 className="text-xl font-bold text-slate-700 mb-2">Nessun cantiere attivo</h3>
                 <p className="text-slate-500 mb-8">Inizia creando il tuo primo cantiere per gestire la contabilità.</p>
                 <button
-                  onClick={handleNewProject}
+                  onClick={() => handleNewProject('In Corso')}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 rounded-xl font-bold transition-all"
                 >
                   Crea ora
