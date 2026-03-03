@@ -32,7 +32,7 @@ import { formatChartValue, formatCurrency } from '../services/formatUtils';
 
 interface DashboardProps {
   projects: Project[];
-  selectedProjectId?: string;
+  selectedProjectIds?: string[];
   onSelectProject?: (id: string, tab: string) => void;
 }
 
@@ -56,15 +56,15 @@ const StatCard = ({ title, value, icon: Icon, color, trend }: any) => (
   </div>
 );
 
-const Dashboard: React.FC<DashboardProps> = ({ projects, selectedProjectId, onSelectProject }) => {
+const Dashboard: React.FC<DashboardProps> = ({ projects, selectedProjectIds = [], onSelectProject }) => {
   const filteredProjects = useMemo(() => {
     // Escludiamo preventivi dalla dashboard principale dei lavori, a meno che non sia selezionato specificamente
     const activeProjects = projects.filter(p => p.status !== 'Preventivo' && p.status !== 'Perso');
-    if (selectedProjectId) {
-      return projects.filter(p => p.id === selectedProjectId);
+    if (selectedProjectIds && selectedProjectIds.length > 0) {
+      return projects.filter(p => selectedProjectIds.includes(p.id));
     }
     return activeProjects;
-  }, [projects, selectedProjectId]);
+  }, [projects, selectedProjectIds]);
 
   const stats = useMemo(() => {
     const totalBudget = filteredProjects.reduce((sum, p) => sum + (p.budget || 0), 0);
@@ -125,12 +125,38 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, selectedProjectId, onSe
   }, [filteredProjects]);
 
   const chartData = useMemo(() => {
-    return filteredProjects
+    const grouped = filteredProjects
       .filter(p => p.status === 'In Corso' || p.status === 'Completato')
-      .slice(0, 6)
-      .map(project => ({
-        name: project.name.length > 15 ? project.name.substring(0, 15) + '...' : project.name,
-        budget: project.budget || 0,
+      .reduce((acc, p) => {
+        const clientName = p.client || 'Generale';
+        if (!acc[clientName]) {
+          acc[clientName] = {
+            name: clientName,
+            budget: 0,
+            spese: 0,
+            guadagno: 0,
+            count: 0
+          };
+        }
+
+        const b = p.budget || 0;
+        const s = (p.expenses || [])
+          .filter(e => e.category !== 'Ricavi')
+          .reduce((sum, e) => sum + Math.abs(e.amount), 0);
+
+        acc[clientName].budget += b;
+        acc[clientName].spese += s;
+        acc[clientName].guadagno += (b - s);
+        acc[clientName].count += 1;
+
+        return acc;
+      }, {} as any);
+
+    return Object.values(grouped)
+      .sort((a: any, b: any) => b.budget - a.budget)
+      .map((g: any) => ({
+        ...g,
+        displayName: g.name.length > 15 ? g.name.substring(0, 15) + '...' : g.name,
       }));
   }, [filteredProjects]);
 
@@ -149,7 +175,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, selectedProjectId, onSe
           <h2 className="text-3xl font-black text-slate-800 tracking-tight">ANALISI GENERALE</h2>
           <p className="text-slate-500 font-medium">Monitoraggio budget, costi e redditività dei cantieri</p>
         </div>
-        {selectedProjectId && (
+        {selectedProjectIds.length > 0 && (
           <button
             onClick={() => onSelectProject?.('', 'dashboard')}
             className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-bold transition-all"
@@ -316,22 +342,29 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, selectedProjectId, onSe
           <div className="flex items-center justify-between mb-8">
             <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
               <PieChartIcon size={20} className="text-blue-500" />
-              SAL per Cantiere
+              SAL per Gruppo Cantiere
             </h3>
-            <span className="text-xs font-bold text-slate-400 bg-slate-50 px-3 py-1 rounded-full border border-slate-100">Top 6 Progetti</span>
+            <span className="text-xs font-bold text-slate-400 bg-slate-50 px-3 py-1 rounded-full border border-slate-100">Analisi Comparativa Clienti</span>
           </div>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <BarChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} dy={10} fontStyle="bold" />
+                <XAxis dataKey="displayName" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} dy={10} fontStyle="bold" />
                 <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `€${formatChartValue(val)}`} />
                 <Tooltip
                   cursor={{ fill: '#f8fafc' }}
                   contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px -5px rgb(0 0 0 / 0.1)', padding: '12px' }}
                   labelStyle={{ fontWeight: 'black', marginBottom: '4px', color: '#1e293b' }}
+                  formatter={(value: any, name: string, props: any) => {
+                    if (name === 'Projects') return [props.payload.count, 'Cantieri'];
+                    return [formatCurrency(value), name];
+                  }}
                 />
-                <Bar dataKey="budget" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={40} name="Budget Totale" />
+                <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px', fontSize: '10px', fontWeight: 'bold' }} />
+                <Bar dataKey="budget" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Budget" />
+                <Bar dataKey="spese" fill="#f43f5e" radius={[4, 4, 0, 0]} name="Spese" />
+                <Bar dataKey="guadagno" fill="#10b981" radius={[4, 4, 0, 0]} name="Guadagno" />
               </BarChart>
             </ResponsiveContainer>
           </div>

@@ -30,8 +30,8 @@ interface LayoutProps {
   setActiveTab: (tab: string) => void;
   onNewProject: (type?: 'In Corso' | 'Preventivo') => void;
   projects: Project[];
-  selectedProjectId: string;
-  onProjectSelect: (id: string) => void;
+  selectedProjectIds: string[];
+  onProjectSelect: (ids: string[]) => void;
   onLogout?: () => void;
   userRole?: string;
 }
@@ -42,18 +42,30 @@ const Layout: React.FC<LayoutProps> = ({
   setActiveTab,
   onNewProject,
   projects,
-  selectedProjectId,
+  selectedProjectIds,
   onProjectSelect,
   onLogout,
   userRole
 }) => {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = React.useState(false);
+  const [isProjectListExpanded, setIsProjectListExpanded] = React.useState(false);
 
-  // Close mobile sidebar when active tab changes
+  // Close mobile sidebar and project list when active tab changes
   React.useEffect(() => {
     setIsMobileSidebarOpen(false);
-  }, [activeTab, selectedProjectId]);
+    setIsProjectListExpanded(false);
+  }, [activeTab]);
+
+  const toggleProject = (projectId: string) => {
+    if (selectedProjectIds.includes(projectId)) {
+      onProjectSelect(selectedProjectIds.filter(id => id !== projectId));
+    } else {
+      onProjectSelect([...selectedProjectIds, projectId]);
+    }
+  };
+
+  const activeProjects = projects.filter(p => p.status !== 'Preventivo' && p.status !== 'Perso');
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -116,30 +128,49 @@ const Layout: React.FC<LayoutProps> = ({
           </button>
         </div>
 
-        {/* Project Selector - Visible if sidebar is wide (on mobile it's always wide if open) */}
+        {/* Project Selector - Collapsible multi-selection */}
         {(isSidebarOpen || isMobileSidebarOpen) && (
-          <div className="px-4 pt-4 pb-0">
-            <div className="relative group">
-              <select
-                value={selectedProjectId}
-                onChange={(e) => onProjectSelect(e.target.value)}
-                className="w-full bg-slate-800 text-white p-3 pl-10 pr-8 rounded-lg appearance-none border border-slate-700 hover:border-slate-600 focus:outline-none focus:border-blue-500 cursor-pointer text-sm font-medium transition-colors"
-                style={{
-                  // Prevent truncation on mobile
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden'
-                }}
-              >
-                <option value="">Tutti i cantieri</option>
-                {projects
-                  .filter(p => p.status !== 'Preventivo' && p.status !== 'Perso')
-                  .map(p => <option key={p.id} value={p.id}>{p.name}</option>)
-                }
-              </select>
-              <Folder size={18} className="absolute left-3 top-3 text-slate-400 group-hover:text-blue-400 transition-colors" />
-              <ChevronDown size={16} className="absolute right-3 top-3.5 text-slate-400 pointer-events-none" />
-            </div>
+          <div className="px-4 pt-4 pb-2 border-b border-slate-800/50">
+            <button
+              onClick={() => setIsProjectListExpanded(!isProjectListExpanded)}
+              className="w-full flex items-center justify-between bg-slate-800 text-white p-2.5 rounded-lg border border-slate-700 hover:border-slate-600 transition-colors text-sm font-medium"
+            >
+              <div className="flex items-center gap-2 overflow-hidden">
+                <Folder size={18} className="text-slate-400 shrink-0" />
+                <span className="truncate">
+                  {selectedProjectIds.length === 0 || selectedProjectIds.length === activeProjects.length
+                    ? 'Tutti i cantieri'
+                    : `${selectedProjectIds.length} selezionati`}
+                </span>
+              </div>
+              <ChevronDown size={16} className={`text-slate-400 transition-transform ${isProjectListExpanded ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isProjectListExpanded && (
+              <div className="mt-2 space-y-1 max-h-[30vh] overflow-y-auto pr-1 custom-scrollbar">
+                <div className="flex items-center justify-between mb-1 px-1">
+                  <span className="text-[10px] uppercase font-bold text-slate-500 tracking-tighter">Filtra Cantieri</span>
+                  <button
+                    onClick={() => onProjectSelect(selectedProjectIds.length === activeProjects.length ? [] : activeProjects.map(p => p.id))}
+                    className="text-[10px] text-blue-400 hover:text-blue-300 font-bold"
+                  >
+                    {selectedProjectIds.length === activeProjects.length ? 'Nessuno' : 'Tutti'}
+                  </button>
+                </div>
+                {activeProjects.map(project => (
+                  <div
+                    key={project.id}
+                    onClick={() => toggleProject(project.id)}
+                    className={`flex items-center gap-2 p-1.5 rounded-md cursor-pointer transition-colors ${selectedProjectIds.includes(project.id) ? 'bg-blue-600/20 text-blue-100' : 'hover:bg-slate-800 text-slate-400'}`}
+                  >
+                    <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${selectedProjectIds.includes(project.id) ? 'bg-blue-600 border-blue-500' : 'border-slate-600'}`}>
+                      {selectedProjectIds.includes(project.id) && <div className="w-1.5 h-1.5 bg-white rounded-sm" />}
+                    </div>
+                    <span className="text-xs truncate">{project.name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

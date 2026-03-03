@@ -12,7 +12,8 @@ import {
     BarChart3,
     PieChart as PieChartIcon,
     Target,
-    Lightbulb
+    Lightbulb,
+    Activity
 } from 'lucide-react';
 import {
     BarChart,
@@ -26,143 +27,177 @@ import {
     Line,
     PieChart,
     Pie,
-    Cell
+    Cell,
+    Legend
 } from 'recharts';
 
 interface StatisticsProps {
     projects: Project[];
+    selectedProjectIds?: string[];
+    onSelectProject?: (id: string, tab: string) => void;
 }
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f43f5e'];
 
-const Statistics: React.FC<StatisticsProps> = ({ projects }) => {
+const Statistics: React.FC<StatisticsProps> = ({ projects, selectedProjectIds = [], onSelectProject }) => {
     const [showAIInsights, setShowAIInsights] = useState(false);
 
-    // Calcolo statistiche reali
+    const filteredProjects = useMemo(() => {
+        if (!projects) return [];
+        if (selectedProjectIds && selectedProjectIds.length > 0) {
+            return projects.filter(p => selectedProjectIds.includes(p.id));
+        }
+        // Default: tutti i progetti attivi/completati (escludi preventivi per le statistiche reali)
+        return projects.filter(p => p.status !== 'Preventivo' && p.status !== 'Perso');
+    }, [projects, selectedProjectIds]);
+
+    // Calcolo statistiche reali e aggregate
     const stats = useMemo(() => {
-        const totalBudget = projects.reduce((sum, p) => sum + (p.budget || 0), 0);
-        const totalExpenses = projects.reduce((sum, p) => sum + (p.totalExpenses || 0), 0);
-        const totalRevenue = projects.reduce((sum, p) => sum + (p.revenue || 0), 0);
+        let totalBudget = 0;
+        let totalExpenses = 0;
+        let totalAdvances = 0;
 
-        const activeProjects = projects.filter(p => p.status === 'in-progress');
-        const completedProjects = projects.filter(p => p.status === 'completed');
-        const delayedProjects = projects.filter(p => p.status === 'delayed');
+        filteredProjects.forEach(p => {
+            totalBudget += (p.budget || 0);
+            const projectExpenses = p.expenses || [];
+            projectExpenses.forEach(e => {
+                const amount = Math.abs(e.amount);
+                if (e.category === 'Ricavi') {
+                    totalAdvances += amount;
+                } else {
+                    totalExpenses += amount;
+                }
+            });
+        });
 
-        const avgBudgetUtilization = projects.length > 0
-            ? (totalExpenses / totalBudget) * 100
-            : 0;
+        const profit = totalBudget - totalExpenses;
+        const profitMargin = totalBudget > 0 ? (profit / totalBudget) * 100 : 0;
+        const budgetUtilization = totalBudget > 0 ? (totalExpenses / totalBudget) * 100 : 0;
 
-        const profitMargin = totalRevenue > 0
-            ? ((totalRevenue - totalExpenses) / totalRevenue) * 100
-            : 0;
+        const activeCount = filteredProjects.filter(p => p.status === 'In Corso').length;
+        const completedCount = filteredProjects.filter(p => p.status === 'Completato').length;
+        const pendingCount = filteredProjects.filter(p => p.status === 'In attesa' || p.status === 'Pianificato').length;
 
         return {
             totalBudget,
             totalExpenses,
-            totalRevenue,
-            profit: totalRevenue - totalExpenses,
-            activeCount: activeProjects.length,
-            completedCount: completedProjects.length,
-            delayedCount: delayedProjects.length,
-            avgBudgetUtilization,
-            profitMargin
+            totalAdvances,
+            profit,
+            profitMargin,
+            budgetUtilization,
+            activeCount,
+            completedCount,
+            pendingCount
         };
-    }, [projects]);
+    }, [filteredProjects]);
 
-    // Dati per grafico andamento mensile (simulato)
+    // Dati reali per grafico andamento temporale (ultimi 6 mesi)
     const monthlyData = useMemo(() => {
-        const months = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu'];
-        return months.map((month, idx) => ({
-            month,
-            ricavi: Math.floor(stats.totalRevenue / 6 * (0.8 + Math.random() * 0.4)),
-            spese: Math.floor(stats.totalExpenses / 6 * (0.8 + Math.random() * 0.4)),
-        }));
-    }, [stats]);
+        const data: Record<string, { month: string, sortedDate: string, ricavi: number, spese: number }> = {};
+        const now = new Date();
 
-    // Dati per grafico stato progetti
+        // Inizializza ultimi 6 mesi
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const key = d.toLocaleString('it-IT', { month: 'short', year: '2-digit' });
+            const sortedDate = d.toISOString().substring(0, 7); // yyyy-mm
+            data[key] = { month: key, sortedDate, ricavi: 0, spese: 0 };
+        }
+
+        filteredProjects.forEach(p => {
+            (p.expenses || []).forEach(e => {
+                const d = new Date(e.date);
+                const key = d.toLocaleString('it-IT', { month: 'short', year: '2-digit' });
+                if (data[key]) {
+                    const amount = Math.abs(e.amount);
+                    if (e.category === 'Ricavi') {
+                        data[key].ricavi += amount;
+                    } else {
+                        data[key].spese += amount;
+                    }
+                }
+            });
+        });
+
+        return Object.values(data).sort((a, b) => a.sortedDate.localeCompare(b.sortedDate));
+    }, [filteredProjects]);
+
+    // Ripartizione spese per categoria
+    const categoryData = useMemo(() => {
+        const cats: Record<string, number> = {};
+        filteredProjects.forEach(p => {
+            (p.expenses || []).forEach(e => {
+                if (e.category !== 'Ricavi') {
+                    cats[e.category] = (cats[e.category] || 0) + Math.abs(e.amount);
+                }
+            });
+        });
+
+        return Object.entries(cats)
+            .map(([name, value]) => ({ name, value }))
+            .sort((a, b) => b.value - a.value);
+    }, [filteredProjects]);
+
+    // Project health/status data
     const projectStatusData = useMemo(() => [
-        { name: 'Attivi', value: stats.activeCount, color: COLORS[0] },
-        { name: 'Completati', value: stats.completedCount, color: COLORS[1] },
-        { name: 'In Ritardo', value: stats.delayedCount, color: COLORS[3] },
+        { name: 'Attivi', value: stats.activeCount, color: '#3b82f6' },
+        { name: 'Completati', value: stats.completedCount, color: '#10b981' },
+        { name: 'In Attesa', value: stats.pendingCount, color: '#f59e0b' },
     ].filter(item => item.value > 0), [stats]);
 
-    // Top 5 progetti per budget
-    const topProjects = useMemo(() => {
-        return [...projects]
-            .sort((a, b) => (b.budget || 0) - (a.budget || 0))
-            .slice(0, 5)
-            .map(p => ({
-                name: p.name.length > 20 ? p.name.substring(0, 20) + '...' : p.name,
-                budget: p.budget || 0,
-                speso: p.totalExpenses || 0,
-                utilizzo: p.budget ? ((p.totalExpenses || 0) / p.budget) * 100 : 0
-            }));
-    }, [projects]);
+    // Top 5 progetti per profitto
+    const topProfitProjects = useMemo(() => {
+        return filteredProjects
+            .map(p => {
+                const b = p.budget || 0;
+                const s = (p.expenses || [])
+                    .filter(e => e.category !== 'Ricavi')
+                    .reduce((sum, e) => sum + Math.abs(e.amount), 0);
+                return {
+                    name: p.name,
+                    profit: b - s,
+                    margin: b > 0 ? ((b - s) / b) * 100 : 0,
+                    budget: b
+                };
+            })
+            .sort((a, b) => b.profit - a.profit)
+            .slice(0, 5);
+    }, [filteredProjects]);
 
     // AI Insights
     const aiInsights = useMemo(() => {
         const insights = [];
 
-        // Analisi margine di profitto
-        if (stats.profitMargin < 15) {
+        if (stats.profitMargin < 15 && stats.totalBudget > 0) {
             insights.push({
                 type: 'warning',
-                title: 'Margine di Profitto Basso',
-                description: `Il tuo margine di profitto è del ${stats.profitMargin.toFixed(1)}%. Considera di rivedere i costi o aumentare i prezzi.`,
-                action: 'Analizza i costi di manodopera e materiali per identificare aree di ottimizzazione.'
-            });
-        } else if (stats.profitMargin > 30) {
-            insights.push({
-                type: 'success',
-                title: 'Eccellente Margine di Profitto',
-                description: `Il tuo margine di profitto del ${stats.profitMargin.toFixed(1)}% è ottimo! Continua così.`,
-                action: 'Mantieni questa efficienza e considera di espandere il business.'
+                title: 'Analisi Redditività',
+                description: `Il margine medio è al ${stats.profitMargin.toFixed(1)}%. Questo è al di sotto della soglia di sicurezza del 20% consigliata per il settore edile.`,
+                action: 'Analizza i costi dei materiali che sembrano incidere per oltre il 40% sul budget totale.'
             });
         }
 
-        // Analisi utilizzo budget
-        if (stats.avgBudgetUtilization > 90) {
-            insights.push({
-                type: 'warning',
-                title: 'Utilizzo Budget Elevato',
-                description: `Stai utilizzando il ${stats.avgBudgetUtilization.toFixed(1)}% del budget totale.`,
-                action: 'Monitora attentamente le spese per evitare sforamenti. Considera di aumentare i budget di contingenza.'
-            });
-        }
-
-        // Progetti in ritardo
-        if (stats.delayedCount > 0) {
+        if (stats.budgetUtilization > 85) {
             insights.push({
                 type: 'alert',
-                title: 'Progetti in Ritardo',
-                description: `Hai ${stats.delayedCount} progett${stats.delayedCount > 1 ? 'i' : 'o'} in ritardo.`,
-                action: 'Rivedi la pianificazione e alloca più risorse ai progetti critici. Considera di rinegoziare le scadenze.'
+                title: 'Rischio Sforamento',
+                description: `L'utilizzo del budget ha raggiunto il ${stats.budgetUtilization.toFixed(1)}%.`,
+                action: 'Monitora gli ultimi ordini di materiali; il tasso di spesa attuale suggerisce una possibile erosione del margine finale.'
             });
         }
 
-        // Diversificazione portfolio
-        if (projects.length < 3) {
+        const highCostCategory = categoryData[0];
+        if (highCostCategory && highCostCategory.value > stats.totalExpenses * 0.5) {
             insights.push({
                 type: 'info',
-                title: 'Diversifica il Portfolio',
-                description: 'Hai pochi progetti attivi. Considera di diversificare per ridurre il rischio.',
-                action: 'Cerca nuove opportunità di business in settori complementari.'
-            });
-        }
-
-        // Efficienza operativa
-        const avgProjectValue = stats.totalBudget / Math.max(projects.length, 1);
-        if (avgProjectValue < 50000) {
-            insights.push({
-                type: 'info',
-                title: 'Valore Medio Progetti',
-                description: `Il valore medio dei tuoi progetti è €${(avgProjectValue / 1000).toFixed(0)}k.`,
-                action: 'Considera di puntare a progetti di valore più alto per migliorare la redditività.'
+                title: 'Concentrazione Costi',
+                description: `La categoria "${highCostCategory.name}" rappresenta il ${(highCostCategory.value / stats.totalExpenses * 100).toFixed(0)}% delle tue uscite.`,
+                action: 'Valuta se rinegoziare i listini con i fornitori principali per questa categoria.'
             });
         }
 
         return insights;
-    }, [stats, projects]);
+    }, [stats, categoryData]);
 
     const getInsightIcon = (type: string) => {
         switch (type) {
@@ -174,49 +209,61 @@ const Statistics: React.FC<StatisticsProps> = ({ projects }) => {
     };
 
     return (
-        <div className="space-y-6">
-            {/* Header con AI Toggle */}
-            <div className="flex justify-between items-center">
+        <div className="space-y-8 pb-12">
+            {/* Header with Selection Context */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/50 backdrop-blur-md p-6 rounded-3xl border border-slate-200 shadow-sm">
                 <div>
-                    <h2 className="text-2xl font-bold text-slate-900">Statistiche e Analytics</h2>
-                    <p className="text-slate-500 text-sm mt-1">Analisi dettagliata delle performance aziendali</p>
+                    <h2 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
+                        <BarChart3 className="text-blue-600" size={32} />
+                        STATISTICHE & ANALYTICS
+                    </h2>
+                    <p className="text-slate-500 font-medium">Analisi finanziaria {selectedProjectIds.length > 0 ? `di ${selectedProjectIds.length} cantieri selezionati` : "generale dei lavori"}</p>
                 </div>
-                <button
-                    onClick={() => setShowAIInsights(!showAIInsights)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all ${showAIInsights
-                            ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
-                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                        }`}
-                >
-                    <Sparkles size={20} />
-                    {showAIInsights ? 'Nascondi' : 'Mostra'} AI Insights
-                </button>
+                <div className="flex items-center gap-3">
+                    {selectedProjectIds.length > 0 && (
+                        <button
+                            onClick={() => onSelectProject?.('', 'statistics')}
+                            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-bold transition-all"
+                        >
+                            Mostra Tutti i Cantieri
+                        </button>
+                    )}
+                    <button
+                        onClick={() => setShowAIInsights(!showAIInsights)}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all shadow-sm ${showAIInsights
+                            ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-blue-200'
+                            : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200'
+                            }`}
+                    >
+                        <Sparkles size={18} />
+                        {showAIInsights ? 'Nascondi' : 'Mostra'} AI Insights
+                    </button>
+                </div>
             </div>
 
             {/* AI Insights Panel */}
             {showAIInsights && aiInsights.length > 0 && (
-                <div className="bg-gradient-to-br from-purple-50 to-blue-50 p-6 rounded-xl border-2 border-purple-200 animate-in slide-in-from-top duration-300">
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="p-2 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg">
-                            <Sparkles className="text-white" size={24} />
+                <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-8 rounded-3xl border border-indigo-100 shadow-inner animate-in fade-in slide-in-from-top-4 duration-500">
+                    <div className="flex items-center gap-4 mb-6">
+                        <div className="p-3 bg-white rounded-2xl shadow-sm text-indigo-600">
+                            <Sparkles size={24} />
                         </div>
                         <div>
-                            <h3 className="text-lg font-bold text-slate-900">Suggerimenti AI per Ottimizzazione Business</h3>
-                            <p className="text-sm text-slate-600">Analisi automatica basata sui tuoi dati</p>
+                            <h3 className="text-xl font-black text-slate-800">Business Intelligence</h3>
+                            <p className="text-slate-500 text-sm">Ottimizzazione basata sui dati reali</p>
                         </div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {aiInsights.map((insight, idx) => (
-                            <div key={idx} className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-                                <div className="flex items-start gap-3">
+                            <div key={idx} className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl border border-white shadow-sm hover:shadow-md transition-all">
+                                <div className="flex items-center gap-3 mb-3">
                                     {getInsightIcon(insight.type)}
-                                    <div className="flex-1">
-                                        <h4 className="font-bold text-slate-900 mb-1">{insight.title}</h4>
-                                        <p className="text-sm text-slate-600 mb-2">{insight.description}</p>
-                                        <div className="bg-slate-50 p-2 rounded text-xs text-slate-700 border-l-2 border-blue-500">
-                                            <strong>Azione consigliata:</strong> {insight.action}
-                                        </div>
-                                    </div>
+                                    <h4 className="font-bold text-slate-800">{insight.title}</h4>
+                                </div>
+                                <p className="text-sm text-slate-600 mb-4 leading-relaxed">{insight.description}</p>
+                                <div className="bg-indigo-50/50 p-3 rounded-xl border-l-4 border-indigo-400">
+                                    <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider mb-1">Azione Consigliata</p>
+                                    <p className="text-xs text-indigo-600 font-medium">{insight.action}</p>
                                 </div>
                             </div>
                         ))}
@@ -224,164 +271,190 @@ const Statistics: React.FC<StatisticsProps> = ({ projects }) => {
                 </div>
             )}
 
-            {/* KPI Cards */}
+            {/* KPI Section */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                    <div className="flex justify-between items-start mb-4">
-                        <div>
-                            <p className="text-sm font-medium text-slate-500 uppercase">Budget Totale</p>
-                            <h3 className="text-2xl font-bold text-slate-900 mt-1">
-                                €{(stats.totalBudget / 1000).toFixed(0)}k
-                            </h3>
-                        </div>
-                        <div className="p-3 bg-blue-50 rounded-lg">
-                            <DollarSign className="text-blue-600" size={24} />
-                        </div>
+                <div className="bg-white p-7 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
+                        <DollarSign size={80} />
                     </div>
-                    <div className="flex items-center text-sm">
-                        <span className="text-slate-600">Su {projects.length} progetti</span>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Budget Potenziale</p>
+                    <h3 className="text-3xl font-black text-slate-800">€{stats.totalBudget.toLocaleString()}</h3>
+                    <div className="mt-4 flex items-center gap-2 text-blue-600 font-bold text-xs bg-blue-50 px-3 py-1.5 rounded-full w-fit">
+                        <Target size={14} />
+                        {filteredProjects.length} Cantieri
                     </div>
                 </div>
 
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                    <div className="flex justify-between items-start mb-4">
-                        <div>
-                            <p className="text-sm font-medium text-slate-500 uppercase">Spese Totali</p>
-                            <h3 className="text-2xl font-bold text-slate-900 mt-1">
-                                €{(stats.totalExpenses / 1000).toFixed(0)}k
-                            </h3>
-                        </div>
-                        <div className="p-3 bg-rose-50 rounded-lg">
-                            <TrendingDown className="text-rose-600" size={24} />
-                        </div>
+                <div className="bg-white p-7 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform text-rose-600">
+                        <TrendingDown size={80} />
                     </div>
-                    <div className="flex items-center text-sm">
-                        <span className={`font-semibold ${stats.avgBudgetUtilization > 90 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                            {stats.avgBudgetUtilization.toFixed(1)}% del budget
-                        </span>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Uscite Complessive</p>
+                    <h3 className="text-3xl font-black text-slate-800">€{stats.totalExpenses.toLocaleString()}</h3>
+                    <div className={`mt-4 flex items-center gap-2 font-bold text-xs px-3 py-1.5 rounded-full w-fit ${stats.budgetUtilization > 85 ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 text-slate-600'}`}>
+                        <Activity size={14} />
+                        {stats.budgetUtilization.toFixed(1)}% del budget
                     </div>
                 </div>
 
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                    <div className="flex justify-between items-start mb-4">
-                        <div>
-                            <p className="text-sm font-medium text-slate-500 uppercase">Profitto</p>
-                            <h3 className="text-2xl font-bold text-slate-900 mt-1">
-                                €{(stats.profit / 1000).toFixed(0)}k
-                            </h3>
-                        </div>
-                        <div className="p-3 bg-emerald-50 rounded-lg">
-                            <TrendingUp className="text-emerald-600" size={24} />
-                        </div>
+                <div className="bg-white p-7 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform text-emerald-600">
+                        <TrendingUp size={80} />
                     </div>
-                    <div className="flex items-center text-sm">
-                        <span className={`font-semibold ${stats.profitMargin < 15 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                            {stats.profitMargin.toFixed(1)}% margine
-                        </span>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Profitto Maturato</p>
+                    <h3 className="text-3xl font-black text-emerald-600">€{stats.profit.toLocaleString()}</h3>
+                    <div className={`mt-4 flex items-center gap-2 font-bold text-xs px-3 py-1.5 rounded-full w-fit ${stats.profitMargin > 20 ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                        <Sparkles size={14} />
+                        {stats.profitMargin.toFixed(1)}% Margine
                     </div>
                 </div>
 
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                    <div className="flex justify-between items-start mb-4">
-                        <div>
-                            <p className="text-sm font-medium text-slate-500 uppercase">Progetti Attivi</p>
-                            <h3 className="text-2xl font-bold text-slate-900 mt-1">
-                                {stats.activeCount}
-                            </h3>
-                        </div>
-                        <div className="p-3 bg-amber-50 rounded-lg">
-                            <Clock className="text-amber-600" size={24} />
-                        </div>
+                <div className="bg-white p-7 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform text-indigo-600">
+                        <Clock size={80} />
                     </div>
-                    <div className="flex items-center text-sm">
-                        <span className="text-slate-600">
-                            {stats.completedCount} completati, {stats.delayedCount} in ritardo
-                        </span>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Stato Operativo</p>
+                    <h3 className="text-3xl font-black text-slate-800">{stats.activeCount} <span className="text-base font-bold text-slate-400 lowercase">Attivi</span></h3>
+                    <div className="mt-4 flex items-center gap-2 text-indigo-600 font-bold text-xs bg-indigo-50 px-3 py-1.5 rounded-full w-fit">
+                        <CheckCircle2 size={14} />
+                        {stats.completedCount} Chiusi
                     </div>
                 </div>
             </div>
 
             {/* Charts Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Andamento Mensile */}
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                        <BarChart3 size={20} className="text-blue-600" />
-                        Andamento Ricavi vs Spese
-                    </h3>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Real Cash Flow Trend */}
+                <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center justify-between mb-8">
+                        <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                            <BarChart3 size={22} className="text-blue-600" />
+                            Cash Flow Storico (6 Mesi)
+                        </h3>
+                    </div>
                     <div className="h-80">
                         <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={monthlyData}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis dataKey="month" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                                <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `€${val / 1000}k`} />
-                                <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                                <Line type="monotone" dataKey="ricavi" stroke="#10b981" strokeWidth={3} dot={{ fill: '#10b981', r: 4 }} name="Ricavi" />
-                                <Line type="monotone" dataKey="spese" stroke="#ef4444" strokeWidth={3} dot={{ fill: '#ef4444', r: 4 }} name="Spese" />
+                                <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} dy={10} fontStyle="bold" />
+                                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(val) => `€${val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val}`} />
+                                <Tooltip
+                                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px -5px rgb(0 0 0 / 0.1)', padding: '15px' }}
+                                    labelStyle={{ fontWeight: 'black', marginBottom: '8px', color: '#1e293b' }}
+                                />
+                                <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px', fontSize: '11px', fontWeight: 'bold' }} />
+                                <Line type="monotone" dataKey="ricavi" stroke="#10b981" strokeWidth={4} dot={{ fill: '#10b981', r: 5, strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 8 }} name="Entrate" />
+                                <Line type="monotone" dataKey="spese" stroke="#f43f5e" strokeWidth={4} dot={{ fill: '#f43f5e', r: 5, strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 8 }} name="Uscite" />
                             </LineChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
 
-                {/* Stato Progetti */}
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                        <PieChartIcon size={20} className="text-blue-600" />
-                        Distribuzione Progetti
-                    </h3>
-                    <div className="flex items-center justify-center h-80">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={projectStatusData}
-                                    innerRadius={60}
-                                    outerRadius={100}
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                    label={(entry) => `${entry.name}: ${entry.value}`}
-                                >
-                                    {projectStatusData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} />
-                                    ))}
-                                </Pie>
-                                <Tooltip />
-                            </PieChart>
-                        </ResponsiveContainer>
+                {/* Cost Breakdown */}
+                <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center justify-between mb-8">
+                        <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                            <PieChartIcon size={22} className="text-indigo-600" />
+                            Ripartizione Spese per Categoria
+                        </h3>
+                    </div>
+                    <div className="h-80 flex flex-col sm:flex-row items-center">
+                        <div className="w-full sm:w-1/2 h-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        data={categoryData}
+                                        innerRadius={65}
+                                        outerRadius={95}
+                                        paddingAngle={6}
+                                        dataKey="value"
+                                        stroke="none"
+                                    >
+                                        {categoryData.map((_, index) => (
+                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip
+                                        formatter={(value: number) => `€${value.toLocaleString()}`}
+                                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px -5px rgb(0 0 0 / 0.1)' }}
+                                    />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                        <div className="w-full sm:w-1/2 space-y-3 pl-4">
+                            {categoryData.slice(0, 5).map((entry, index) => (
+                                <div key={index} className="flex flex-col">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
+                                            <span className="text-xs font-bold text-slate-700 truncate max-w-[100px]">{entry.name}</span>
+                                        </div>
+                                        <span className="text-xs font-black text-slate-900">€{entry.value.toLocaleString()}</span>
+                                    </div>
+                                    <div className="w-full h-1 bg-slate-100 rounded-full mt-1.5">
+                                        <div
+                                            className="h-full rounded-full"
+                                            style={{
+                                                width: `${(entry.value / stats.totalExpenses * 100)}%`,
+                                                backgroundColor: COLORS[index % COLORS.length]
+                                            }}
+                                        ></div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* Top 5 Progetti */}
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                    <Target size={20} className="text-blue-600" />
-                    Top 5 Progetti per Budget
-                </h3>
-                <div className="space-y-4">
-                    {topProjects.map((project, idx) => (
-                        <div key={idx} className="border border-slate-200 rounded-lg p-4 hover:bg-slate-50 transition-colors">
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="font-semibold text-slate-900">{project.name}</span>
-                                <span className="text-sm text-slate-600">
-                                    €{(project.speso / 1000).toFixed(0)}k / €{(project.budget / 1000).toFixed(0)}k
-                                </span>
-                            </div>
-                            <div className="relative w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-                                <div
-                                    className={`absolute top-0 left-0 h-full rounded-full transition-all ${project.utilizzo > 90 ? 'bg-rose-500' : project.utilizzo > 70 ? 'bg-amber-500' : 'bg-emerald-500'
-                                        }`}
-                                    style={{ width: `${Math.min(project.utilizzo, 100)}%` }}
-                                />
-                            </div>
-                            <div className="flex justify-between items-center mt-1">
-                                <span className="text-xs text-slate-500">Utilizzo Budget</span>
-                                <span className={`text-xs font-bold ${project.utilizzo > 90 ? 'text-rose-600' : project.utilizzo > 70 ? 'text-amber-600' : 'text-emerald-600'
-                                    }`}>
-                                    {project.utilizzo.toFixed(1)}%
-                                </span>
-                            </div>
-                        </div>
-                    ))}
+            {/* Top Projects Table Style */}
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <div>
+                        <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight flex items-center gap-3">
+                            <Target className="text-emerald-600" size={24} />
+                            Analisi Redditività Cantieri
+                        </h3>
+                        <p className="text-slate-500 text-sm mt-1">Ranking dei progetti per utile maturato</p>
+                    </div>
+                </div>
+                <div className="p-0">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-slate-50">
+                                    <th className="px-8 py-5 text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Cantiere</th>
+                                    <th className="px-8 py-5 text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 text-right">Budget</th>
+                                    <th className="px-8 py-5 text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 text-right">Utile</th>
+                                    <th className="px-8 py-5 text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Margine</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {topProfitProjects.map((project, idx) => (
+                                    <tr key={idx} className="hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-none">
+                                        <td className="px-8 py-6 font-bold text-slate-800">{project.name}</td>
+                                        <td className="px-8 py-6 text-right font-medium text-slate-500">€{project.budget.toLocaleString()}</td>
+                                        <td className="px-8 py-6 text-right">
+                                            <span className={`font-black ${project.profit > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                €{project.profit.toLocaleString()}
+                                            </span>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex-1 min-w-[100px] h-2 bg-slate-100 rounded-full overflow-hidden">
+                                                    <div
+                                                        className={`h-full rounded-full ${project.margin > 20 ? 'bg-emerald-500' : project.margin > 10 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                                                        style={{ width: `${Math.max(0, Math.min(100, project.margin))}%` }}
+                                                    ></div>
+                                                </div>
+                                                <span className="text-xs font-black text-slate-800">{project.margin.toFixed(1)}%</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>

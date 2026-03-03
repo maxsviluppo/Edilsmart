@@ -61,7 +61,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [projects, setProjects] = useState<Project[]>([]);
   const [globalExpenses, setGlobalExpenses] = useState<Expense[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const [modalInitialType, setModalInitialType] = useState<'In Corso' | 'Preventivo'>('In Corso');
   const [isLoading, setIsLoading] = useState(false);
@@ -402,39 +402,46 @@ const App: React.FC = () => {
       case 'dashboard':
         return <Dashboard
           projects={projects}
-          selectedProjectId={selectedProjectId}
+          selectedProjectIds={selectedProjectIds}
           onSelectProject={(id, tab) => {
-            setSelectedProjectId(id);
+            setSelectedProjectIds(id ? [id] : []);
             setActiveTab(tab);
           }}
         />;
       case 'new-computo':
         // Questo tab apre solo il modal e poi torna alla dashboard o archivio
-        return <Dashboard projects={projects} selectedProjectId={selectedProjectId} />;
+        return <Dashboard projects={projects} selectedProjectIds={selectedProjectIds} />;
       case 'cronoprogramma':
-        return <Cronoprogramma project={projects.find(p => p.id === selectedProjectId)} />;
+        return <Cronoprogramma project={projects.find(p => p.id === selectedProjectIds[0])} />;
       case 'materials':
         return <Materials
           projects={projects}
           globalExpenses={globalExpenses}
-          selectedProjectId={selectedProjectId}
+          selectedProjectId={selectedProjectIds[0] || ''}
           onUpdateProject={handleUpdateProject}
           onAddExpense={handleAddExpense}
           onUpdateExpense={handleUpdateExpense}
           onDeleteExpense={handleDeleteExpense}
         />;
       case 'payroll':
-        return <Payroll projects={projects} selectedProjectId={selectedProjectId} />;
+        return <Payroll projects={projects} selectedProjectId={selectedProjectIds[0] || ''} />;
       case 'computo':
-        return <ComputoMetrico project={projects.find(p => p.id === selectedProjectId)} />;
+        return <ComputoMetrico project={projects.find(p => p.id === selectedProjectIds[0])} />;
       case 'invoices':
-        return <InvoicesQuotes selectedProjectId={selectedProjectId} projects={projects} initialAction={invoicesAction === 'new-quote' ? 'new-quote' : undefined} />;
+        return <InvoicesQuotes selectedProjectId={selectedProjectIds[0] || ''} projects={projects} initialAction={invoicesAction === 'new-quote' ? 'new-quote' : undefined} />;
       case 'pricelists':
         return <PriceListManager />;
       case 'statistics':
-        return <Statistics projects={projects} />;
+        return <Statistics
+          projects={projects}
+          selectedProjectIds={selectedProjectIds}
+          onSelectProject={(id, tab) => {
+            setSelectedProjectIds(id ? [id] : []);
+            setActiveTab(tab);
+          }}
+        />;
       case 'projects':
-        const selectedProject = projects.find(p => p.id === selectedProjectId);
+        const selectedProject = projects.find(p => p.id === selectedProjectIds[0]);
         if (selectedProject) {
           return (
             <div className="p-8">
@@ -451,7 +458,7 @@ const App: React.FC = () => {
                 onDeleteExpense={handleDeleteExpense}
               />
               <button
-                onClick={() => setSelectedProjectId('')}
+                onClick={() => setSelectedProjectIds([])}
                 className="mt-6 text-slate-500 hover:text-slate-700 font-semibold flex items-center gap-2"
               >
                 ← Torna alla lista cantieri
@@ -500,8 +507,8 @@ const App: React.FC = () => {
                     .filter(p => p.status === 'In Corso' || p.status === 'Completato')
                     .map(project => (
                       <div key={project.id}
-                        className={`bg-white rounded-xl border p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 cursor-pointer transition-all hover:shadow-md ${selectedProjectId === project.id ? 'border-emerald-500 ring-2 ring-emerald-100 shadow-md' : 'border-slate-200'}`}
-                        onClick={() => setSelectedProjectId(project.id)}
+                        className={`bg-white rounded-xl border p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 cursor-pointer transition-all hover:shadow-md ${selectedProjectIds.includes(project.id) ? 'border-emerald-500 ring-2 ring-emerald-100 shadow-md' : 'border-slate-200'}`}
+                        onClick={() => setSelectedProjectIds([project.id])}
                       >
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
@@ -555,7 +562,7 @@ const App: React.FC = () => {
         );
       case 'accounting':
         return <Accounting
-          selectedProjectId={selectedProjectId}
+          selectedProjectId={selectedProjectIds[0] || ''}
           projects={projects}
           globalExpenses={globalExpenses}
           onUpdateProject={handleUpdateProject}
@@ -573,7 +580,7 @@ const App: React.FC = () => {
           projects={projects}
           onUpdateProject={handleUpdateProject}
           onSelectProject={(id, tab) => {
-            setSelectedProjectId(id);
+            setSelectedProjectIds([id]);
             if (tab) setActiveTab(tab);
           }}
           onNewEstimate={() => setIsNewProjectModalOpen(true)}
@@ -595,7 +602,7 @@ const App: React.FC = () => {
       case 'settings':
         return <SettingsView />;
       default:
-        return <Dashboard projects={projects} selectedProjectId={selectedProjectId} />;
+        return <Dashboard projects={projects} selectedProjectIds={selectedProjectIds} />;
     }
   };
 
@@ -609,8 +616,8 @@ const App: React.FC = () => {
       setActiveTab={setActiveTab}
       onNewProject={handleNewProject}
       projects={projects}
-      selectedProjectId={selectedProjectId}
-      onProjectSelect={setSelectedProjectId}
+      selectedProjectIds={selectedProjectIds}
+      onProjectSelect={setSelectedProjectIds}
       onLogout={handleLogout}
       userRole={userProfile?.role}
     >
@@ -626,17 +633,17 @@ const App: React.FC = () => {
           initialType={modalInitialType}
           isLoading={isLoading}
         />
-      )}{selectedProjectId && isProjectSettingsOpen && (
+      )}{selectedProjectIds.length > 0 && isProjectSettingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
           <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl overflow-y-auto p-6 relative animate-in fade-in zoom-in duration-200">
             <ProjectSettings
-              project={projects.find(p => p.id === selectedProjectId)!}
+              project={projects.find(p => p.id === selectedProjectIds[0])!}
               onUpdate={handleUpdateProject}
               onDelete={async (id) => {
                 try {
                   await projectService.deleteProject(id);
                   setProjects(prev => prev.filter(p => p.id !== id));
-                  setSelectedProjectId('');
+                  setSelectedProjectIds(prev => prev.filter(pid => pid !== id));
                   setIsProjectSettingsOpen(false);
                   setToast({ message: "Cantiere eliminato con successo", type: 'success' });
                 } catch (error) {
