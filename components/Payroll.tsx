@@ -313,6 +313,9 @@ const Payroll: React.FC<PayrollProps> = ({ projects, selectedProjectId }) => {
     // Filtered Entries for Report
     const filteredEntriesForReport = useMemo(() => {
         return entries.filter(e => {
+            // Only include entries with a valid amount (skip absences/zero amounts)
+            if (!e.amount || e.amount <= 0 || e.isAbsent) return false;
+
             // Project matching
             const matchesProject = !selectedProjectFilter || e.projectId === selectedProjectFilter;
 
