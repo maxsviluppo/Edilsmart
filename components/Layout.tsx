@@ -20,9 +20,11 @@ import {
   Package,
   LogOut,
   ShieldCheck,
-  LayoutTemplate
+  LayoutTemplate,
+  Bell
 } from 'lucide-react';
 import { Project } from '../types';
+import AgendaModal from './AgendaModal';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -50,6 +52,31 @@ const Layout: React.FC<LayoutProps> = ({
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = React.useState(false);
   const [isProjectListExpanded, setIsProjectListExpanded] = React.useState(false);
+  const [isAgendaOpen, setIsAgendaOpen] = React.useState(false);
+  const [hasUpcomingEvents, setHasUpcomingEvents] = React.useState(false);
+
+  // Check for upcoming events for the notification bell
+  const checkAgendaNotifications = React.useCallback(() => {
+    const saved = localStorage.getItem('edilsmart_agenda');
+    if (saved) {
+      try {
+        const events = JSON.parse(saved);
+        const todayStr = new Date().toISOString().split('T')[0];
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+        const upcoming = events.filter((e: any) => e.date === todayStr || e.date === tomorrowStr);
+        setHasUpcomingEvents(upcoming.length > 0);
+      } catch (e) { }
+    }
+  }, []);
+
+  React.useEffect(() => {
+    checkAgendaNotifications();
+    window.addEventListener('agenda-updated', checkAgendaNotifications);
+    return () => window.removeEventListener('agenda-updated', checkAgendaNotifications);
+  }, [checkAgendaNotifications]);
 
   // Close mobile sidebar and project list when active tab changes
   React.useEffect(() => {
@@ -93,8 +120,15 @@ const Layout: React.FC<LayoutProps> = ({
         <button onClick={() => setIsMobileSidebarOpen(true)} className="p-2 -ml-2 hover:bg-slate-800 rounded-lg">
           <Menu size={24} />
         </button>
-        <span className="font-bold text-lg">EdilSmart</span>
-        <div className="w-8"></div> {/* Spacer for centering */}
+        <span className="font-bold text-lg cursor-pointer" onClick={() => setIsAgendaOpen(true)}>EdilSmart</span>
+        <div className="relative">
+          <button onClick={() => setIsAgendaOpen(true)} className="p-2 -mr-2 hover:bg-slate-800 rounded-lg">
+            <Bell size={20} />
+            {hasUpcomingEvents && (
+              <span className="absolute top-1.5 right-0.5 w-2.5 h-2.5 bg-rose-500 border-2 border-slate-900 rounded-full"></span>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Sidebar Backdrop */}
@@ -237,7 +271,17 @@ const Layout: React.FC<LayoutProps> = ({
               <Plus size={18} className="mr-2" />
               Nuovo Cantiere
             </button>
-            <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600">
+            <button
+              onClick={() => setIsAgendaOpen(true)}
+              className="relative p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors active:scale-95"
+              title="Apri Agenda"
+            >
+              <Bell size={22} />
+              {hasUpcomingEvents && (
+                <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 border-2 border-white rounded-full animate-pulse"></span>
+              )}
+            </button>
+            <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 cursor-pointer hover:bg-slate-300 transition-colors">
               AD
             </div>
           </div>
@@ -247,6 +291,8 @@ const Layout: React.FC<LayoutProps> = ({
           {children}
         </div>
       </main>
+
+      <AgendaModal isOpen={isAgendaOpen} onClose={() => setIsAgendaOpen(false)} />
     </div>
   );
 };

@@ -25,7 +25,8 @@ import {
   PieChart as PieChartIcon,
   Activity,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  CalendarDays
 } from 'lucide-react';
 import { Project, Expense } from '../types';
 import { formatChartValue, formatCurrency } from '../services/formatUtils';
@@ -175,14 +176,27 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, selectedProjectIds = []
           <h2 className="text-3xl font-black text-slate-800 tracking-tight">ANALISI GENERALE</h2>
           <p className="text-slate-500 font-medium">Monitoraggio budget, costi e redditività dei cantieri</p>
         </div>
-        {selectedProjectIds.length > 0 && (
+        <div className="flex items-center gap-3">
+          {selectedProjectIds.length > 0 && (
+            <button
+              onClick={() => onSelectProject?.('', 'dashboard')}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-bold transition-all"
+            >
+              Mostra Tutti i Cantieri
+            </button>
+          )}
           <button
-            onClick={() => onSelectProject?.('', 'dashboard')}
-            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-bold transition-all"
+            onClick={() => {
+              // Trigger click on the bell icon in Layout
+              const bellBtn = document.querySelector('button[title="Apri Agenda"]') as HTMLButtonElement;
+              if (bellBtn) bellBtn.click();
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl text-sm font-bold transition-all border border-indigo-200"
           >
-            Mostra Tutti i Cantieri
+            <CalendarDays size={18} />
+            Apri Agenda
           </button>
-        )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -405,7 +419,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, selectedProjectIds = []
           </div>
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 
