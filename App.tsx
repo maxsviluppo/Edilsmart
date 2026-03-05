@@ -117,18 +117,33 @@ const App: React.FC = () => {
           // Filtriamo le spese globali (senza progetto associato)
           const globalExpensesData = expensesData.filter(e => !e.projectId);
 
+          // Convertiamo le voci paghe globali (solo quelle con importo > 0)
+          const globalPayroll = combinedPayroll
+            .filter(pe => !pe.projectId && pe.amount && pe.amount > 0)
+            .map(pe => ({
+              id: `payroll_${pe.id}`,
+              date: pe.date,
+              description: combinedEmployees.find(emp => emp.id === pe.employeeId)?.name || 'Operaio',
+              amount: -pe.amount!,
+              category: 'Manodopera',
+              status: 'Pagato' as const,
+              projectId: undefined
+            }));
+
+          const allGlobalExpenses = [...globalExpensesData, ...globalPayroll];
+
           // Distribuiamo le spese ai rispettivi progetti includendo le paghe operai come 'Manodopera'
           const projectsWithExpenses = projectsData.map(p => {
             const projectExpenses = expensesData.filter(e => e.projectId === p.id);
 
-            // Convertiamo le voci paghe in spese virtuali per il calcolo dashboard
+            // Convertiamo le voci paghe in spese virtuali per il calcolo dashboard (solo > 0)
             const projectPayroll = combinedPayroll
-              .filter(pe => pe.projectId === p.id)
+              .filter(pe => pe.projectId === p.id && pe.amount && pe.amount > 0)
               .map(pe => ({
                 id: `payroll_${pe.id}`,
                 date: pe.date,
-                description: `Paga: ${combinedEmployees.find(emp => emp.id === pe.employeeId)?.name || 'Operaio'}`,
-                amount: -(pe.amount || 0),
+                description: combinedEmployees.find(emp => emp.id === pe.employeeId)?.name || 'Operaio',
+                amount: -pe.amount!,
                 category: 'Manodopera',
                 status: 'Pagato' as const,
                 projectId: p.id
@@ -144,9 +159,9 @@ const App: React.FC = () => {
           });
 
           setProjects(projectsWithExpenses);
-          setGlobalExpenses(globalExpensesData);
+          setGlobalExpenses(allGlobalExpenses);
           // Memorizziamo le spese globali in localStorage per Accounting (retrocompatibilità)
-          localStorage.setItem('global_transactions', JSON.stringify(globalExpensesData));
+          localStorage.setItem('global_transactions', JSON.stringify(allGlobalExpenses));
         } catch (error) {
           console.error("Errore nel caricamento dei dati:", error);
         } finally {
@@ -596,7 +611,7 @@ const App: React.FC = () => {
           isLoading={isLoading}
         />;
       case 'documents':
-        return <Documents selectedProjectId={selectedProjectId} projects={projects} />;
+        return <Documents selectedProjectId={selectedProjectIds[0] || ''} projects={projects} />;
       case 'admin':
         return userProfile?.role === 'superadmin' ? <AdminPanel /> : <Dashboard projects={projects} />;
       case 'settings':
