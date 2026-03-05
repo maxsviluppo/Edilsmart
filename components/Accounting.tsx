@@ -152,24 +152,8 @@ const Accounting: React.FC<AccountingProps> = ({
       });
     }
 
-    // Add Payroll (Virtual Expenses)
-    const virtualPayrollExpenses: Expense[] = payrollEntries
-      .filter(pe => !project || pe.projectId === project.id)
-      .map(pe => {
-        const emp = employees.find(e => e.id === pe.employeeId);
-        const proj = projects?.find(p => p.id === pe.projectId);
-        return {
-          id: `payroll_${pe.id}`,
-          date: pe.date,
-          description: `${emp?.name || 'Sconosciuto'}${!project && proj ? ` [${proj.name}]` : ''}`,
-          amount: -(pe.amount || 0), // Outflow is negative
-          category: 'Manodopera',
-          status: 'Pagato' as const,
-        };
-      });
-
-    return [...result, ...virtualPayrollExpenses];
-  }, [globalExpenses, projects, payrollEntries, employees, project?.id]);
+    return result;
+  }, [globalExpenses, projects, project]);
 
   const filteredTransactions = useMemo(() => {
     return allTransactions.filter(t => {
