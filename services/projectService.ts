@@ -33,7 +33,8 @@ export const projectService = {
         return (data || []).map(p => ({
             ...p,
             startDate: p.start_date,
-            endDate: p.end_date
+            endDate: p.end_date,
+            photos: p.photos || []
         }));
     },
 
@@ -51,6 +52,7 @@ export const projectService = {
             end_date: (project.endDate && project.endDate !== '') ? project.endDate : null,
             iva: project.iva || 10,
             progress: project.progress || 0,
+            photos: project.photos || [],
             ...(userId ? { user_id: userId } : {})
         };
 
@@ -83,7 +85,8 @@ export const projectService = {
             start_date: (project.startDate && project.startDate !== '') ? project.startDate : null,
             end_date: (project.endDate && project.endDate !== '') ? project.endDate : null,
             iva: project.iva,
-            progress: project.progress
+            progress: project.progress,
+            photos: project.photos || []
         };
 
         const { data, error } = await supabase
@@ -102,7 +105,8 @@ export const projectService = {
         return {
             ...data,
             startDate: data.start_date,
-            endDate: data.end_date
+            endDate: data.end_date,
+            photos: data.photos || []
         };
     },
 

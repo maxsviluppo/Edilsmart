@@ -21,7 +21,8 @@ import {
   LogOut,
   ShieldCheck,
   LayoutTemplate,
-  Bell
+  Bell,
+  Camera
 } from 'lucide-react';
 import { Project } from '../types';
 import AgendaModal from './AgendaModal';
@@ -107,6 +108,7 @@ const Layout: React.FC<LayoutProps> = ({
     { id: 'invoices', label: 'Fatture', icon: FileText },
     { id: 'pricelists', label: 'Prezziari', icon: Database },
     { id: 'statistics', label: 'Statistiche', icon: PieChart },
+    { id: 'gallery', label: 'Galleria Foto', icon: Camera },
   ];
 
   if (userRole === 'superadmin') {
@@ -114,9 +116,9 @@ const Layout: React.FC<LayoutProps> = ({
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
+    <div className="flex h-screen bg-slate-50 overflow-hidden print:h-auto print:overflow-visible">
       {/* Mobile Header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-slate-900 z-20 flex items-center justify-between px-4 text-white">
+      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-slate-900 z-20 flex items-center justify-between px-4 text-white print:hidden">
         <button onClick={() => setIsMobileSidebarOpen(true)} className="p-2 -ml-2 hover:bg-slate-800 rounded-lg">
           <Menu size={24} />
         </button>
@@ -258,7 +260,7 @@ const Layout: React.FC<LayoutProps> = ({
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto flex flex-col print:overflow-visible pt-16 md:pt-0">
+      <main className="flex-1 overflow-auto flex flex-col print:block print:overflow-visible pt-16 md:pt-0">
         <header className="hidden md:flex h-16 bg-white border-b border-slate-200 items-center justify-between px-8 sticky top-0 z-10 print:hidden">
           <h1 className="text-xl font-semibold text-slate-800">
             {menuItems.find(m => m.id === activeTab)?.label}

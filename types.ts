@@ -45,6 +45,7 @@ export interface Project {
   progress?: number;
   computo?: ComputoRow[];
   expenses?: Expense[];
+  photos?: Array<{ id: string; url: string; name: string; storage_path: string }>;
   totalExpenses?: number;
   revenue?: number;
 }

@@ -54,6 +54,7 @@ import PriceListManager from './components/PriceListManager';
 import ProjectDetails from './components/ProjectDetails';
 import ProjectSettings from './components/ProjectSettings';
 import Estimates from './components/Estimates';
+import PhotoGallery from './components/PhotoGallery';
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -616,6 +617,8 @@ const App: React.FC = () => {
         return userProfile?.role === 'superadmin' ? <AdminPanel /> : <Dashboard projects={projects} />;
       case 'settings':
         return <SettingsView />;
+      case 'gallery':
+        return <PhotoGallery projects={projects} selectedProjectId={selectedProjectIds[0] || ''} />;
       default:
         return <Dashboard projects={projects} selectedProjectIds={selectedProjectIds} />;
     }

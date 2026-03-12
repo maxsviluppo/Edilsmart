@@ -258,15 +258,39 @@ const ComputoMetrico: React.FC<ComputoMetricoProps> = ({ project }) => {
       {/* CSS for Print Formatting */}
       <style>{`
         @media print {
-          @page { margin: 10mm; size: A4 portrait; }
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          @page { margin: 15mm 10mm; size: A4 portrait; }
+          body { 
+            -webkit-print-color-adjust: exact !important; 
+            print-color-adjust: exact !important;
+            background: white !important;
+          }
           .print-hidden { display: none !important; }
           .print-visible { display: block !important; }
-          #page-footer { position: fixed; bottom: 0; width: 100%; text-align: right; font-size: 10px; color: #666; padding-top: 10px; border-top: 1px solid #ccc; }
+          #page-footer { 
+            position: fixed; 
+            bottom: 0; 
+            width: 100%; 
+            text-align: right; 
+            font-size: 8px; 
+            color: #999; 
+            padding-top: 5px; 
+            border-top: 1px solid #eee; 
+          }
           #page-footer::after { content: "Pagina " counter(page); }
-          tr { page-break-inside: avoid; }
-          thead { display: table-header-group; }
-          tfoot { display: table-footer-group; }
+          
+          /* Prevent cutting off content */
+          * { overflow: visible !important; }
+          html, body { height: auto !important; overflow: visible !important; }
+          
+          tr { page-break-inside: avoid !important; }
+          thead { display: table-header-group !important; }
+          tfoot { display: table-footer-group !important; }
+          
+          .print-no-shadow { box-shadow: none !important; }
+          .print-no-border { border: none !important; }
+          
+          /* Force hidden footer info from browser if possible */
+          header, footer { display: none !important; }
         }
       `}</style>
 
@@ -318,7 +342,7 @@ const ComputoMetrico: React.FC<ComputoMetricoProps> = ({ project }) => {
       </div>
 
       {/* Main Computo Sheet */}
-      <div className="w-full mx-auto bg-white shadow-lg rounded-xl overflow-hidden print:shadow-none print:w-full print:rounded-none">
+      <div className="w-full mx-auto bg-white shadow-lg rounded-xl overflow-hidden print:shadow-none print:w-full print:rounded-none print:overflow-visible">
         <div className="p-6 md:p-8 print:p-0 min-h-[500px] flex flex-col relative overflow-x-auto print:overflow-visible">
 
           {/* Header Documento - Enhanced with Settings */}
@@ -565,6 +589,18 @@ const ComputoMetrico: React.FC<ComputoMetricoProps> = ({ project }) => {
         <p className="text-[11px] text-slate-400 mt-2 italic">
           Le note vengono salvate automaticamente e sono specifiche per il cantiere: <strong>{project.name}</strong>.
         </p>
+
+        {/* Firma e Timbro Section - Visible only in print */}
+        <div className="hidden print:grid grid-cols-2 gap-20 mt-16 px-4 pb-8">
+          <div className="text-center pt-8 border-t border-slate-300">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-600 mb-12">Timbro e Firma dell'Impresa</p>
+            <div className="h-10"></div>
+          </div>
+          <div className="text-center pt-8 border-t border-slate-300">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-600 mb-12">Firma del Committente</p>
+            <div className="h-10"></div>
+          </div>
+        </div>
       </div>
 
       {/* Price List Search Modal */}
