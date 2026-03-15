@@ -116,7 +116,7 @@ const Layout: React.FC<LayoutProps> = ({
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden print:h-auto print:overflow-visible">
+    <div className="flex h-screen bg-slate-50 overflow-hidden print:h-auto print:overflow-visible print:bg-white">
       {/* Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-slate-900 z-20 flex items-center justify-between px-4 text-white print:hidden">
         <button onClick={() => setIsMobileSidebarOpen(true)} className="p-2 -ml-2 hover:bg-slate-800 rounded-lg">
@@ -289,7 +289,7 @@ const Layout: React.FC<LayoutProps> = ({
           </div>
         </header>
 
-        <div className="p-4 md:p-8">
+        <div className="p-4 md:p-8 print:p-0">
           {children}
         </div>
       </main>

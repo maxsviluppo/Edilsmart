@@ -152,12 +152,14 @@ const ComputoMetrico: React.FC<ComputoMetricoProps> = ({ project }) => {
   const handleGetAISuggestions = async (row: ComputoRow) => {
     try {
       const item: PriceListItem = {
+        id: 'temp',
         code: row.code,
         description: row.description,
         unit: row.unit,
         price: row.price,
         category: row.category || '',
-        region: region
+        region: region,
+        year: new Date().getFullYear()
       };
       const suggestions = await getAISuggestions(item);
       if (suggestions.length > 0) {
@@ -254,11 +256,11 @@ const ComputoMetrico: React.FC<ComputoMetricoProps> = ({ project }) => {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 md:-mt-8">
       {/* CSS for Print Formatting */}
       <style>{`
         @media print {
-          @page { margin: 15mm 10mm; size: A4 portrait; }
+          @page { margin: 0mm 10mm 5mm 10mm; size: A4 portrait; }
           body { 
             -webkit-print-color-adjust: exact !important; 
             print-color-adjust: exact !important;
@@ -291,6 +293,11 @@ const ComputoMetrico: React.FC<ComputoMetricoProps> = ({ project }) => {
           
           /* Force hidden footer info from browser if possible */
           header, footer { display: none !important; }
+
+          /* Pull up the main container */
+          .print-container-pull {
+            margin-top: -10mm !important; /* Sposta in alto di circa 40px */
+          }
         }
       `}</style>
 
@@ -343,10 +350,10 @@ const ComputoMetrico: React.FC<ComputoMetricoProps> = ({ project }) => {
 
       {/* Main Computo Sheet */}
       <div className="w-full mx-auto bg-white shadow-lg rounded-xl overflow-hidden print:shadow-none print:w-full print:rounded-none print:overflow-visible">
-        <div className="p-6 md:p-8 print:p-0 min-h-[500px] flex flex-col relative overflow-x-auto print:overflow-visible">
+        <div className="p-2 md:p-2 print:p-0 print-container-pull min-h-[500px] flex flex-col relative overflow-x-auto print:overflow-visible">
 
           {/* Header Documento - Enhanced with Settings */}
-          <div className="mb-6 print:mb-8 flex justify-between items-start border-b-2 border-emerald-800 pb-4">
+          <div className="mb-2 print:mb-2 flex justify-between items-start border-b-2 border-emerald-800 pb-2">
             <div>
               {companySettings?.logoUrl ? (
                 <img src={companySettings.logoUrl} alt="Logo" className="h-16 mb-2 object-contain" />
@@ -371,14 +378,14 @@ const ComputoMetrico: React.FC<ComputoMetricoProps> = ({ project }) => {
           {/* Main Table */}
           <table className="w-full min-w-[1000px] print:min-w-0 border-collapse border-2 border-emerald-700 text-xs font-sans table-fixed relative print:text-[10px]">
             <thead className="print:table-header-group">
-              <tr className="bg-emerald-50 text-emerald-900 border-b border-emerald-700 print:bg-slate-50">
+              <tr className="bg-emerald-50 text-emerald-900 border-b border-emerald-700 print:bg-white">
                 <th className="border-r border-emerald-700 p-1 w-[8%] align-middle text-center" rowSpan={2}>N. ORD<br />TARIFFA</th>
                 <th className="border-r border-emerald-700 p-1 w-[37%] align-middle text-center" rowSpan={2}>DESIGNAZIONE DEI LAVORI</th>
                 <th className="border-r border-emerald-700 p-1 border-b align-middle w-[25%]" colSpan={4}>DIMENSIONI</th>
                 <th className="border-r border-emerald-700 p-1 w-[10%] align-middle text-center" rowSpan={2}>Quantità</th>
                 <th className="p-1 border-b align-middle w-[20%]" colSpan={2}>IMPORTI</th>
               </tr>
-              <tr className="bg-emerald-50 text-emerald-900 border-b-double border-emerald-700 text-[10px] print:bg-slate-50">
+              <tr className="bg-emerald-50 text-emerald-900 border-b-double border-emerald-700 text-[10px] print:bg-white">
                 <th className="border-r border-emerald-700 p-1 w-[6.25%]">par.ug..</th>
                 <th className="border-r border-emerald-700 p-1 w-[6.25%]">lung. .</th>
                 <th className="border-r border-emerald-700 p-1 w-[6.25%]">larg. .</th>
@@ -492,7 +499,7 @@ const ComputoMetrico: React.FC<ComputoMetricoProps> = ({ project }) => {
 
                   {/* Dimensions */}
                   {['par_ug', 'lung', 'larg', 'h_peso'].map((field) => (
-                    <td key={field} className="border-r border-emerald-600/50 p-0 text-center align-top bg-emerald-50/5 hover:bg-emerald-50/30">
+                    <td key={field} className="border-r border-emerald-600/50 p-0 text-center align-top bg-emerald-50/5 hover:bg-emerald-50/30 print:bg-white">
                       <input
                         className="w-full text-center bg-transparent focus:bg-emerald-50 outline-none print:hidden py-2"
                         type="number"
