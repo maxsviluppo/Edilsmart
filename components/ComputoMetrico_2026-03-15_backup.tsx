@@ -242,69 +242,6 @@ const ComputoMetrico: React.FC<ComputoMetricoProps> = ({ project }) => {
 
   const totalComputo = useMemo(() => rows.reduce((acc, row) => acc + row.total, 0), [rows]);
 
-  // Pagination and Carry-Over Logic for Printing
-  const paginatedPages = useMemo(() => {
-    if (rows.length === 0) return [];
-    
-    // Configurazione dimensionale A4 (approsimativa per browser)
-    const PAGE_HEIGHT_LIMIT = 820; // Altezza utile in px per A4
-    const ROWS_PER_PAGE_FALLBACK = 12; // Se non possiamo stimare l'altezza
-    
-    const pages: { 
-      rows: ComputoRow[], 
-      pageTotal: number, 
-      cumulativeTotal: number, 
-      previousTotal: number,
-      startIndex: number
-    }[] = [];
-    
-    let currentPageRows: ComputoRow[] = [];
-    let currentHeight = 0;
-    let runningTotal = 0;
-    
-    rows.forEach((row, index) => {
-      // Stima altezza riga in base alla descrizione (circa 65 caratteri per riga @ 10px)
-      const descriptionLines = Math.max(
-        (row.description || "").split('\n').length, 
-        Math.ceil((row.description || "").length / 65)
-      );
-      // Altezza base riga (padding, bordi, input) + altezza testo stimata
-      const estimatedRowHeight = 70 + (descriptionLines * 16); 
-
-      // Se superiamo il limite pagina (e non è la prima riga della pagina)
-      if (currentHeight + estimatedRowHeight > PAGE_HEIGHT_LIMIT && currentPageRows.length > 0) {
-        const pageSubTotal = currentPageRows.reduce((sum, r) => sum + r.total, 0);
-        pages.push({
-          rows: currentPageRows,
-          pageTotal: pageSubTotal,
-          cumulativeTotal: runningTotal + pageSubTotal,
-          previousTotal: runningTotal,
-          startIndex: index - currentPageRows.length + 1
-        });
-        
-        runningTotal += pageSubTotal;
-        currentPageRows = [row];
-        currentHeight = estimatedRowHeight;
-      } else {
-        currentPageRows.push(row);
-        currentHeight += estimatedRowHeight;
-      }
-    });
-
-    if (currentPageRows.length > 0) {
-      const lastPageSubTotal = currentPageRows.reduce((sum, r) => sum + r.total, 0);
-      pages.push({
-        rows: currentPageRows,
-        pageTotal: lastPageSubTotal,
-        cumulativeTotal: runningTotal + lastPageSubTotal,
-        previousTotal: runningTotal,
-        startIndex: rows.length - currentPageRows.length + 1
-      });
-    }
-    
-    return pages;
-  }, [rows]);
-
   const handleExportPDF = () => {
     window.print();
   };
@@ -342,10 +279,6 @@ const ComputoMetrico: React.FC<ComputoMetricoProps> = ({ project }) => {
             border-top: 1px solid #eee; 
           }
           #page-footer::after { content: "Pagina " counter(page); }
-          
-          .print-page-break { page-break-after: always !important; }
-          .print-carry-over-row { background: #f8fafc !important; font-weight: bold; border-top: 2px solid #065f46; }
-          .print-brought-forward-row { background: #ecfdf5 !important; font-weight: bold; border-bottom: 2px solid #065f46; }
           
           /* Prevent cutting off content */
           * { overflow: visible !important; }
@@ -442,95 +375,8 @@ const ComputoMetrico: React.FC<ComputoMetricoProps> = ({ project }) => {
             </div>
           </div>
 
-          {/* Versione per Stampa con Paginazione e Riposta/Riporto */}
-          <div className="hidden print:block">
-            {paginatedPages.map((page, pIdx) => (
-              <div key={pIdx} className={pIdx < paginatedPages.length - 1 ? "print-page-break mb-8" : ""}>
-                {pIdx > 0 && <div className="text-[10px] text-slate-400 italic mb-2 uppercase tracking-widest text-right">Continua da pagina {pIdx}</div>}
-                <table className="w-full border-collapse border-2 border-emerald-700 text-[10px] font-sans table-fixed relative mb-4">
-                  <thead>
-                    <tr className="bg-emerald-50 text-emerald-900 border-b border-emerald-700">
-                      <th className="border-r border-emerald-700 p-1 w-[8%] align-middle text-center" rowSpan={2}>N. ORD<br />TARIFFA</th>
-                      <th className="border-r border-emerald-700 p-1 w-[37%] align-middle text-center" rowSpan={2}>DESIGNAZIONE DEI LAVORI</th>
-                      <th className="border-r border-emerald-700 p-1 border-b align-middle w-[25%]" colSpan={4}>DIMENSIONI</th>
-                      <th className="border-r border-emerald-700 p-1 w-[10%] align-middle text-center" rowSpan={2}>Quantità</th>
-                      <th className="p-1 border-b align-middle w-[20%]" colSpan={2}>IMPORTI</th>
-                    </tr>
-                    <tr className="bg-emerald-50 text-emerald-900 border-b-double border-emerald-700 text-[10px]">
-                      <th className="border-r border-emerald-700 p-1 w-[6.25%]">par.ug..</th>
-                      <th className="border-r border-emerald-700 p-1 w-[6.25%]">lung. .</th>
-                      <th className="border-r border-emerald-700 p-1 w-[6.25%]">larg. .</th>
-                      <th className="border-r border-emerald-700 p-1 w-[6.25%]">H/peso</th>
-                      <th className="border-r border-emerald-700 p-1 w-[10%]">unitario</th>
-                      <th className="p-1 w-[10%]">TOTALE</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {/* SE NON È LA PRIMA PAGINA, AGGIUNGI IL RIPORTO */}
-                    {pIdx > 0 && (
-                      <tr className="print-brought-forward-row bg-emerald-50 text-emerald-900">
-                        <td className="border-r border-emerald-700 p-2 text-center italic">---</td>
-                        <td className="border-r border-emerald-700 p-2 text-left uppercase tracking-widest font-black">RIPORTO PAGINA PRECEDENTE</td>
-                        <td colSpan={6} className="border-r border-emerald-700 p-2 text-right">€ {page.previousTotal.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="p-2 text-right">€ {page.previousTotal.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      </tr>
-                    )}
-
-                    {page.rows.map((row, rIdx) => (
-                      <tr key={row.id} className="border-b border-emerald-600/30 align-top break-inside-avoid">
-                        <td className="border-r border-emerald-600/50 p-1 text-center font-bold">{page.startIndex + rIdx}</td>
-                        <td className="border-r border-emerald-600/50 p-2 text-justify whitespace-pre-wrap">
-                          <div className="font-bold text-[8px] text-slate-400 mb-1">{row.code}</div>
-                          {row.description}
-                          <div className="font-bold text-[9px] text-emerald-800 italic mt-2">{row.unit ? `(${row.unit})` : ''}</div>
-                        </td>
-                        {['par_ug', 'lung', 'larg', 'h_peso'].map((field) => (
-                          <td key={field} className="border-r border-emerald-600/50 p-1 text-center">
-                            {(row.dimensions as any)?.[field] ? (row.dimensions as any)[field].toFixed(2) : ''}
-                          </td>
-                        ))}
-                        <td className="border-r border-emerald-600/50 p-2 text-right font-bold">
-                          {row.quantity ? row.quantity.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
-                        </td>
-                        <td className="border-r border-emerald-600/50 p-2 text-right">
-                          {row.price ? row.price.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
-                        </td>
-                        <td className="p-2 text-right font-bold text-emerald-900 bg-emerald-50/5">
-                          {row.total ? row.total.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
-                        </td>
-                      </tr>
-                    ))}
-
-                    {/* SE NON È L'ULTIMA PAGINA, AGGIUNGI IL TOTALE DA RIPORTARE */}
-                    {pIdx < paginatedPages.length - 1 && (
-                      <tr className="print-carry-over-row bg-slate-50 text-emerald-900">
-                        <td className="border-r border-emerald-700 p-2 text-center italic">---</td>
-                        <td className="border-r border-emerald-700 p-2 text-left uppercase tracking-widest font-black">TOTALE DA RIPORTARE A PAG. {pIdx + 2}</td>
-                        <td colSpan={6} className="border-r border-emerald-700 p-2 text-right">€ {page.cumulativeTotal.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="p-2 text-right">€ {page.cumulativeTotal.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      </tr>
-                    )}
-                  </tbody>
-                  {/* SE È L'ULTIMA PAGINA, MOSTRA IL TOTALE FINALE */}
-                  {pIdx === paginatedPages.length - 1 && (
-                    <tfoot>
-                      <tr className="border-t-2 border-emerald-700 bg-emerald-50 font-bold text-emerald-900">
-                        <td colSpan={7} className="border-r border-emerald-700 p-3 text-left uppercase tracking-wider text-[11px]">
-                          Totale Complessivo Computo (IVA Esclusa)
-                        </td>
-                        <td colSpan={2} className="p-3 text-right text-lg font-black bg-white text-emerald-950">
-                          € {totalComputo.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
-              </div>
-            ))}
-          </div>
-
-          {/* Main Table (Visible only on Screen) */}
-          <table className="w-full min-w-[1000px] border-collapse border-2 border-emerald-700 text-xs font-sans table-fixed relative print:hidden">
+          {/* Main Table */}
+          <table className="w-full min-w-[1000px] print:min-w-0 border-collapse border-2 border-emerald-700 text-xs font-sans table-fixed relative print:text-[10px]">
             <thead className="print:table-header-group">
               <tr className="bg-emerald-50 text-emerald-900 border-b border-emerald-700 print:bg-white">
                 <th className="border-r border-emerald-700 p-1 w-[8%] align-middle text-center" rowSpan={2}>N. ORD<br />TARIFFA</th>
