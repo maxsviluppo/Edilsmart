@@ -13,7 +13,8 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 import { Project } from '../types';
-import { supabase } from '../services/supabaseClient';
+import { supabase, PROJECT_FILES_BUCKET } from '../services/supabaseClient';
+import { formatStorageError } from '../services/storageErrors';
 import { projectService } from '../services/projectService';
 
 interface PhotoGalleryProps {
@@ -48,19 +49,27 @@ const PhotoGallery: React.FC<PhotoGalleryProps> = ({ projects, selectedProjectId
 
     setIsUploading(true);
     try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        throw new Error('Sessione scaduta. Esci e accedi di nuovo al pannello.');
+      }
+
       const fileExt = file.name.split('.').pop() || 'jpg';
       const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
       const filePath = `photos/${project.id}/${fileName}`;
 
-      // Upload to existing project-files bucket
       const { error: uploadError } = await supabase.storage
-        .from('project-files')
-        .upload(filePath, file);
+        .from(PROJECT_FILES_BUCKET)
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: file.type || 'image/jpeg',
+        });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) throw new Error(formatStorageError(uploadError));
 
       const { data: urlData } = supabase.storage
-        .from('project-files')
+        .from(PROJECT_FILES_BUCKET)
         .getPublicUrl(filePath);
 
       const newPhoto = {
@@ -71,17 +80,21 @@ const PhotoGallery: React.FC<PhotoGalleryProps> = ({ projects, selectedProjectId
       };
 
       const updatedPhotos = [...photos, newPhoto];
-      await projectService.updateProject({
-        ...project,
-        photos: updatedPhotos
-      });
+      try {
+        await projectService.updateProject({
+          ...project,
+          photos: updatedPhotos
+        });
+      } catch (dbError) {
+        await supabase.storage.from(PROJECT_FILES_BUCKET).remove([filePath]);
+        throw new Error(formatStorageError(dbError));
+      }
 
-      // Dispatch event to refresh data in App.tsx
       window.dispatchEvent(new CustomEvent('accounting-updated'));
       
-    } catch (error) {
+    } catch (error: any) {
       console.error("Errore upload foto:", error);
-      alert("Errore durante il caricamento della foto.");
+      alert(error?.message || "Errore durante il caricamento della foto.");
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -97,7 +110,7 @@ const PhotoGallery: React.FC<PhotoGalleryProps> = ({ projects, selectedProjectId
     try {
       // 1. Remove from storage
       await supabase.storage
-        .from('project-files')
+        .from(PROJECT_FILES_BUCKET)
         .remove([photoToDelete.storage_path]);
 
       // 2. Update project database

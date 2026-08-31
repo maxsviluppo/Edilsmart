@@ -1,4 +1,5 @@
-import { supabase } from './supabaseClient';
+import { supabase, PROJECT_FILES_BUCKET } from './supabaseClient';
+import { formatStorageError } from './storageErrors';
 
 export interface ProjectFile {
     id: string;
@@ -13,6 +14,12 @@ export interface ProjectFile {
 }
 
 export const projectFileService = {
+    async checkStorageSetup(): Promise<string | null> {
+        const { error } = await supabase.storage.from(PROJECT_FILES_BUCKET).list('', { limit: 1 });
+        if (!error) return null;
+        return formatStorageError(error);
+    },
+
     async getFiles(projectId: string): Promise<ProjectFile[]> {
         const { data, error } = await supabase
             .from('project_files')
@@ -40,18 +47,22 @@ export const projectFileService = {
         const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
         const filePath = `${projectId}/${fileName}`;
 
-        const { error: uploadError, data: uploadData } = await supabase.storage
-            .from('project-files')
-            .upload(filePath, file);
+        const { error: uploadError } = await supabase.storage
+            .from(PROJECT_FILES_BUCKET)
+            .upload(filePath, file, {
+                cacheControl: '3600',
+                upsert: false,
+                contentType: file.type || undefined,
+            });
 
         if (uploadError) {
             console.error("Errore upload storage:", uploadError);
-            throw uploadError;
+            throw new Error(formatStorageError(uploadError));
         }
 
         // 2. Ottieni l'URL pubblico
         const { data: urlData } = supabase.storage
-            .from('project-files')
+            .from(PROJECT_FILES_BUCKET)
             .getPublicUrl(filePath);
 
         // 3. Salva i metadati nel database
@@ -73,9 +84,9 @@ export const projectFileService = {
 
         if (dbError) {
             // Se fallisce il DB, proviamo a pulire lo storage
-            await supabase.storage.from('project-files').remove([filePath]);
+            await supabase.storage.from(PROJECT_FILES_BUCKET).remove([filePath]);
             console.error("Errore salvataggio metadati:", dbError);
-            throw dbError;
+            throw new Error(formatStorageError(dbError));
         }
 
         return data;
@@ -84,7 +95,7 @@ export const projectFileService = {
     async deleteFile(fileId: string, storagePath: string): Promise<void> {
         // 1. Elimina dallo storage
         const { error: storageError } = await supabase.storage
-            .from('project-files')
+            .from(PROJECT_FILES_BUCKET)
             .remove([storagePath]);
 
         if (storageError) {

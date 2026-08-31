@@ -99,6 +99,12 @@ export const projectService = {
         if (error) {
             console.error("Supabase update error:", error);
             const msg = error.message || "Errore sconosciuto";
+            if (msg.toLowerCase().includes('photos')) {
+                throw new Error("Colonna 'photos' mancante. Esegui SUPABASE_PHOTOS_FIX.sql su Supabase.");
+            }
+            if (msg.toLowerCase().includes('row-level security') || msg.toLowerCase().includes('policy')) {
+                throw new Error('Permesso negato sul cantiere. Esegui SUPABASE_PHOTOS_FIX.sql e rifai login.');
+            }
             throw new Error(`Errore database: ${msg}`);
         }
 

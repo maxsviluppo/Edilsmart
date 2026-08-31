@@ -41,11 +41,18 @@ const ProjectFiles: React.FC<ProjectFilesProps> = ({ projectId }) => {
         setIsLoading(true);
         setError(null);
         try {
+            const storageIssue = await projectFileService.checkStorageSetup();
+            if (storageIssue) {
+                setError(storageIssue);
+                setFiles([]);
+                return;
+            }
+
             const data = await projectFileService.getFiles(projectId);
             setFiles(data);
         } catch (err: any) {
             console.error(err);
-            setError("Impossibile caricare i file. Assicurati che la tabella 'project_files' esista su Supabase.");
+            setError(err?.message || "Impossibile caricare i file. Assicurati che la tabella 'project_files' esista su Supabase.");
         } finally {
             setIsLoading(false);
         }
@@ -71,7 +78,7 @@ const ProjectFiles: React.FC<ProjectFilesProps> = ({ projectId }) => {
             // Messaggio di successo (opzionale, potremmo usare un toast globale)
         } catch (err: any) {
             console.error(err);
-            setError(err.message || "Errore durante il caricamento del file. Verifica che il bucket 'project-files' esista su Supabase.");
+            setError(err.message || "Errore durante il caricamento del file. Verifica bucket, tabella e policy Supabase.");
         } finally {
             setIsUploading(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
